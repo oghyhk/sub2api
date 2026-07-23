@@ -33,6 +33,7 @@ type gatewayModelItemForTest struct {
 	SupportsReasoningEffort bool                                  `json:"supportsReasoningEffort"`
 	ReasoningEffort         string                                `json:"reasoningEffort"`
 	ReasoningEfforts        []gatewayReasoningEffortOptionForTest `json:"reasoningEfforts"`
+	ContextWindow           int                                   `json:"context_window"`
 }
 
 type gatewayReasoningEffortOptionForTest struct {
@@ -197,8 +198,9 @@ func TestGatewayModels_CustomModelsListDisabledKeepsOriginalModels(t *testing.T)
 						Platform: service.PlatformOpenAI,
 						Credentials: map[string]any{
 							"model_mapping": map[string]any{
-								"gpt-5.5": "gpt-5.5",
-								"gpt-5.4": "gpt-5.4",
+								"gpt-5.5":     "gpt-5.5",
+								"gpt-5.4":     "gpt-5.4",
+								"gpt-5.6-sol": "gpt-5.6-sol",
 							},
 						},
 					},
@@ -227,7 +229,8 @@ func TestGatewayModels_CustomModelsListDisabledKeepsOriginalModels(t *testing.T)
 
 	var got gatewayModelsResponseForTest
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
-	require.Equal(t, []string{"gpt-5.4", "gpt-5.5"}, modelIDsForTest(got.Data))
+	require.Equal(t, []string{"gpt-5.4", "gpt-5.5", "gpt-5.6-sol"}, modelIDsForTest(got.Data))
+	require.Equal(t, 358000, got.Data[2].ContextWindow)
 }
 
 func TestGatewayModels_CustomModelsListFiltersAndOrdersMappedModels(t *testing.T) {

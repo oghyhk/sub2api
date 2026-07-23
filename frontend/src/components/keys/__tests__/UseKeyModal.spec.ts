@@ -528,6 +528,9 @@ describe('UseKeyModal', () => {
     expect(parsed.provider['google-vps2'].options.baseURL).toBe('https://example.com/antigravity/v1beta')
     expect(parsed.model).toBe('openai/gpt-5.6-sol')
     expect(parsed.small_model).toBe('openai/gpt-5.6-luna')
+    for (const model of ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna']) {
+      expect(parsed.provider.openai.models[model].limit.context).toBe(358000)
+    }
     expect(JSON.stringify(parsed)).not.toContain('gpt-5.5')
   })
 

@@ -1036,7 +1036,7 @@ function generateOpenCodeConfig(
     'gpt-5.6-sol': {
       name: 'GPT-5.6 Sol',
       limit: {
-        context: 1050000,
+        context: 358000,
         output: 128000
       },
       options: {
@@ -1053,7 +1053,7 @@ function generateOpenCodeConfig(
     'gpt-5.6-terra': {
       name: 'GPT-5.6 Terra',
       limit: {
-        context: 1050000,
+        context: 358000,
         output: 128000
       },
       options: {
@@ -1070,7 +1070,7 @@ function generateOpenCodeConfig(
     'gpt-5.6-luna': {
       name: 'GPT-5.6 Luna',
       limit: {
-        context: 1050000,
+        context: 358000,
         output: 128000
       },
       options: {
@@ -1462,7 +1462,7 @@ function generateOpenCodeConfig(
       .filter((model) => model.providerFamily === 'gpt')
       .map((model) => [model.id, legacyOpenAIModels[model.id] || {
         name: model.displayName,
-        limit: { context: 1050000, output: 128000 },
+        limit: { context: 358000, output: 128000 },
         options: { store: false },
         variants: { low: {}, medium: {}, high: {}, xhigh: {}, max: {} }
       }])

@@ -121,6 +121,11 @@ describe('AccountUsageCell', () => {
         'gemini-3.1-pro-high': { utilization: 12, reset_time: '2026-03-01T10:00:00Z' },
         'gemini-3-flash': { utilization: 12, reset_time: '2026-03-01T10:00:00Z' },
         'gemini-3.1-flash-image': { utilization: 12, reset_time: '2026-03-01T10:00:00Z' }
+      },
+      antigravity_local_usage_7d: {
+        requests: 42,
+        tokens: 123456,
+        cost: 1.25
       }
     })
 
@@ -142,6 +147,10 @@ describe('AccountUsageCell', () => {
     const bars = wrapper.findAll('.usage-bar')
     expect(bars).toHaveLength(1)
     expect(bars[0].text()).toBe('admin.accounts.usageWindow.geminiShared|12|2026-03-01T10:00:00Z')
+    expect(wrapper.text()).toContain('7d')
+    expect(wrapper.text()).toContain('42 req')
+    expect(wrapper.text()).toContain('123.5K')
+    expect(wrapper.text()).toContain('$1.25')
   })
 
   it('Antigravity 不同的 Gemini 配额池保持分开并识别当前 Pro 模型 ID', async () => {

@@ -287,6 +287,9 @@
 
       <!-- Usage data from API -->
       <div v-else-if="hasAntigravityQuotaFromAPI" class="space-y-1">
+        <div class="text-[9px] font-medium text-gray-500 dark:text-gray-400">
+          {{ t('admin.accounts.usageWindow.providerQuotaLegend') }}
+        </div>
         <template v-if="antigravitySharedGeminiUsageFromAPI">
           <UsageProgressBar
             :label="t('admin.accounts.usageWindow.geminiShared')"
@@ -332,6 +335,21 @@
           :resets-at="antigravityClaudeUsageFromAPI.resetTime"
           color="amber"
         />
+
+        <div
+          v-if="antigravityLocalUsage7d"
+          class="flex items-center gap-1 pt-0.5 text-[9px] text-gray-500 dark:text-gray-400"
+          :title="t('admin.accounts.usageWindow.localWeeklyHint')"
+        >
+          <span class="w-[32px] shrink-0 rounded bg-gray-100 px-1 text-center font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+            7d
+          </span>
+          <span>{{ formatWindowRequests(antigravityLocalUsage7d) }} req</span>
+          <span>·</span>
+          <span>{{ formatWindowTokens(antigravityLocalUsage7d) }}</span>
+          <span>·</span>
+          <span>${{ formatWindowCost(antigravityLocalUsage7d) }}</span>
+        </div>
 
         <div v-if="aiCreditsDisplay" class="mt-1 text-[10px] text-gray-500 dark:text-gray-400">
           💳 {{ t('admin.accounts.aiCreditsBalance') }}: {{ aiCreditsDisplay }}
@@ -838,6 +856,8 @@ const aiCreditsDisplay = computed(() => {
   if (total <= 0) return null
   return total.toFixed(0)
 })
+
+const antigravityLocalUsage7d = computed(() => usageInfo.value?.antigravity_local_usage_7d ?? null)
 
 // Antigravity 账户类型（从 load_code_assist 响应中提取）
 const antigravityTier = computed(() => {

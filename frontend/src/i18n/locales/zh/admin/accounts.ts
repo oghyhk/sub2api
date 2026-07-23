@@ -340,6 +340,8 @@ export default {
         statsTitleDaily: '每日用量统计',
         geminiProDaily: 'Pro',
         geminiFlashDaily: 'Flash',
+        providerQuotaLegend: '上游配额已用 · 距离重置',
+        localWeeklyHint: 'Sub2API 本地记录的滚动 7 天流量。这是实际用量，不是 Google 配额百分比。',
         geminiShared: 'Gem',
         geminiSharedHint: 'Pro、Flash 与图片模型共用的 Gemini 配额。Google 仅返回一个重置窗口，不提供周配额。',
         gemini3Pro: 'Pro',

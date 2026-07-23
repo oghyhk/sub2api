@@ -1274,6 +1274,8 @@ export default {
         statsTitleDaily: 'Daily Usage Statistics',
         geminiProDaily: 'Pro',
         geminiFlashDaily: 'Flash',
+        providerQuotaLegend: 'Provider quota used · resets in',
+        localWeeklyHint: 'Traffic recorded locally by Sub2API over the rolling 7 days. This is usage, not a Google quota percentage.',
         geminiShared: 'Gem',
         geminiSharedHint: 'Shared Gemini quota for Pro, Flash, and Image. Google reports one reset window and does not expose a weekly quota.',
         gemini3Pro: 'Pro',

@@ -72,21 +72,14 @@ describe('AccountUsageCell', () => {
     })
   })
 
-  it('Antigravity 图片用量会聚合新旧 image 模型', async () => {
+  it('Antigravity 显示 Gemini 和 Claude 的 5h 与 7d 四个上游配额窗口', async () => {
     getUsage.mockResolvedValue({
       antigravity_quota: {
-        'gemini-2.5-flash-image': {
-          utilization: 45,
-          reset_time: '2026-03-01T11:00:00Z'
-        },
-        'gemini-3.1-flash-image': {
-          utilization: 20,
-          reset_time: '2026-03-01T10:00:00Z'
-        },
-        'gemini-3-pro-image': {
-          utilization: 70,
-          reset_time: '2026-03-01T09:00:00Z'
-        }
+        'gemini-5h': { utilization: 1, reset_time: '2026-03-01T10:00:00Z' },
+        'gemini-weekly': { utilization: 82, reset_time: '2026-03-07T10:00:00Z' },
+        '3p-5h': { utilization: 0, reset_time: '2026-03-01T11:00:00Z' },
+        '3p-weekly': { utilization: 100, reset_time: '2026-03-07T11:00:00Z' },
+        'gemini-3-flash': { utilization: 55, reset_time: '2026-03-01T12:00:00Z' }
       }
     })
 
@@ -112,20 +105,24 @@ describe('AccountUsageCell', () => {
 
     await flushPromises()
 
-    expect(wrapper.text()).toContain('admin.accounts.usageWindow.gemini3Image|70|2026-03-01T09:00:00Z')
+    const bars = wrapper.findAll('.usage-bar')
+    expect(wrapper.find('.quota-window-grid').exists()).toBe(true)
+    expect(bars).toHaveLength(4)
+    expect(bars.map((bar) => bar.text())).toEqual([
+      'admin.accounts.usageWindow.fiveHourShort|1|2026-03-01T10:00:00Z',
+      'admin.accounts.usageWindow.sevenDayShort|82|2026-03-07T10:00:00Z',
+      'admin.accounts.usageWindow.fiveHourShort|0|2026-03-01T11:00:00Z',
+      'admin.accounts.usageWindow.sevenDayShort|100|2026-03-07T11:00:00Z'
+    ])
+    expect(wrapper.text()).toContain('admin.accounts.usageWindow.gemini')
+    expect(wrapper.text()).toContain('admin.accounts.usageWindow.claude')
   })
 
-  it('Antigravity 相同的 Gemini 配额池只显示一个共享进度条', async () => {
+  it('Antigravity 周配额摘要不可用时保留 Gemini 与 Claude 的 5h 回退窗口', async () => {
     getUsage.mockResolvedValue({
       antigravity_quota: {
-        'gemini-3.1-pro-high': { utilization: 12, reset_time: '2026-03-01T10:00:00Z' },
         'gemini-3-flash': { utilization: 12, reset_time: '2026-03-01T10:00:00Z' },
-        'gemini-3.1-flash-image': { utilization: 12, reset_time: '2026-03-01T10:00:00Z' }
-      },
-      antigravity_local_usage_7d: {
-        requests: 42,
-        tokens: 123456,
-        cost: 1.25
+        'claude-sonnet-4-6': { utilization: 34, reset_time: '2026-03-01T11:00:00Z' }
       }
     })
 
@@ -145,42 +142,9 @@ describe('AccountUsageCell', () => {
     await flushPromises()
 
     const bars = wrapper.findAll('.usage-bar')
-    expect(bars).toHaveLength(1)
-    expect(bars[0].text()).toBe('admin.accounts.usageWindow.geminiShared|12|2026-03-01T10:00:00Z')
-    expect(wrapper.text()).toContain('7d')
-    expect(wrapper.text()).toContain('42 req')
-    expect(wrapper.text()).toContain('123.5K')
-    expect(wrapper.text()).toContain('$1.25')
-  })
-
-  it('Antigravity 不同的 Gemini 配额池保持分开并识别当前 Pro 模型 ID', async () => {
-    getUsage.mockResolvedValue({
-      antigravity_quota: {
-        'gemini-pro-agent': { utilization: 65, reset_time: '2026-03-07T10:00:00Z' },
-        'gemini-3.6-flash-tiered': { utilization: 20, reset_time: '2026-03-01T10:00:00Z' },
-        'gemini-3.1-flash-image': { utilization: 30, reset_time: '2026-03-01T11:00:00Z' }
-      }
-    })
-
-    const wrapper = mount(AccountUsageCell, {
-      props: { account: makeAccount({ id: 1004, extra: {} }) },
-      global: {
-        stubs: {
-          UsageProgressBar: {
-            props: ['label', 'utilization', 'resetsAt', 'color'],
-            template: '<div class="usage-bar">{{ label }}|{{ utilization }}|{{ resetsAt }}</div>'
-          },
-          AccountQuotaInfo: true
-        }
-      }
-    })
-
-    await flushPromises()
-
-    expect(wrapper.text()).toContain('admin.accounts.usageWindow.gemini3Pro|65|2026-03-07T10:00:00Z')
-    expect(wrapper.text()).toContain('admin.accounts.usageWindow.gemini3Flash|20|2026-03-01T10:00:00Z')
-    expect(wrapper.text()).toContain('admin.accounts.usageWindow.gemini3Image|30|2026-03-01T11:00:00Z')
-    expect(wrapper.text()).not.toContain('admin.accounts.usageWindow.geminiShared')
+    expect(bars).toHaveLength(2)
+    expect(bars[0].text()).toContain('admin.accounts.usageWindow.fiveHourShort|12')
+    expect(bars[1].text()).toContain('admin.accounts.usageWindow.fiveHourShort|34')
   })
 
   it('Antigravity 会显示 AI Credits 余额信息', async () => {

@@ -196,8 +196,7 @@ type UsageInfo struct {
 	GeminiFlashMinute  *UsageProgress `json:"gemini_flash_minute,omitempty"`  // Gemini Flash RPM
 
 	// Antigravity 多模型配额
-	AntigravityQuota        map[string]*AntigravityModelQuota `json:"antigravity_quota,omitempty"`
-	AntigravityLocalUsage7d *WindowStats                      `json:"antigravity_local_usage_7d,omitempty"`
+	AntigravityQuota map[string]*AntigravityModelQuota `json:"antigravity_quota,omitempty"`
 
 	// Grok / xAI 被动额度快照
 	GrokRequestQuota       *xai.QuotaWindow    `json:"grok_request_quota,omitempty"`
@@ -366,9 +365,6 @@ func (s *AccountUsageService) GetUsage(ctx context.Context, accountID int64, for
 	if account.Platform == PlatformAntigravity {
 		usage, err := s.getAntigravityUsage(ctx, account)
 		if err == nil {
-			if usage != nil {
-				usage.AntigravityLocalUsage7d = antigravityLocalUsage7d(ctx, s.usageLogRepo, account.ID, time.Now())
-			}
 			s.tryClearRecoverableAccountError(ctx, account)
 		}
 		return usage, err
@@ -477,17 +473,6 @@ func (s *AccountUsageService) GetUsage(ctx context.Context, accountID int64, for
 
 	// API Key账号不支持usage查询
 	return nil, fmt.Errorf("account type %s does not support usage query", account.Type)
-}
-
-func antigravityLocalUsage7d(ctx context.Context, repo UsageLogRepository, accountID int64, now time.Time) *WindowStats {
-	if repo == nil || accountID <= 0 {
-		return nil
-	}
-	stats, err := repo.GetAccountWindowStats(ctx, accountID, now.Add(-7*24*time.Hour))
-	if err != nil {
-		return nil
-	}
-	return windowStatsFromAccountStats(stats)
 }
 
 // GetPassiveUsage 从 Account.Extra 中的被动采样数据构建 UsageInfo，不调用外部 API。

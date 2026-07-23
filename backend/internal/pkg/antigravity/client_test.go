@@ -1562,6 +1562,41 @@ func TestClient_FetchAvailableModels_Success_RealCall(t *testing.T) {
 	}
 }
 
+func TestClient_RetrieveUserQuotaSummary_Success_RealCall(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || !strings.HasSuffix(r.URL.Path, "/v1internal:retrieveUserQuotaSummary") {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		if r.Header.Get("Authorization") != "Bearer test-token" {
+			t.Fatalf("unexpected authorization header")
+		}
+		var reqBody FetchAvailableModelsRequest
+		if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if reqBody.Project != "project-abc" {
+			t.Fatalf("project = %q", reqBody.Project)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"groups":[{"buckets":[{"bucketId":"gemini-5h","remainingFraction":0.75,"resetTime":"2026-07-23T10:00:00Z"},{"bucketId":"gemini-weekly","remainingFraction":0.25,"resetTime":"2026-07-29T10:00:00Z"}]}]}`))
+	}))
+	defer server.Close()
+
+	withMockBaseURLs(t, []string{server.URL})
+	client := mustNewClient(t, "")
+	resp, err := client.RetrieveUserQuotaSummary(context.Background(), "test-token", "project-abc")
+	if err != nil {
+		t.Fatalf("RetrieveUserQuotaSummary failed: %v", err)
+	}
+	if len(resp.Groups) != 1 || len(resp.Groups[0].Buckets) != 2 {
+		t.Fatalf("unexpected summary: %#v", resp)
+	}
+	weekly := resp.Groups[0].Buckets[1]
+	if weekly.BucketID != "gemini-weekly" || weekly.RemainingFraction == nil || *weekly.RemainingFraction != 0.25 {
+		t.Fatalf("unexpected weekly bucket: %#v", weekly)
+	}
+}
+
 func TestClient_FetchAvailableModels_HTTPError_RealCall(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)

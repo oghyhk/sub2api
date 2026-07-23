@@ -286,69 +286,53 @@
       </div>
 
       <!-- Usage data from API -->
-      <div v-else-if="hasAntigravityQuotaFromAPI" class="space-y-1">
+      <div v-else-if="hasAntigravityQuotaFromAPI" class="min-w-[300px] space-y-1">
         <div class="text-[9px] font-medium text-gray-500 dark:text-gray-400">
           {{ t('admin.accounts.usageWindow.providerQuotaLegend') }}
         </div>
-        <template v-if="antigravitySharedGeminiUsageFromAPI">
-          <UsageProgressBar
-            :label="t('admin.accounts.usageWindow.geminiShared')"
-            :title="t('admin.accounts.usageWindow.geminiSharedHint')"
-            :utilization="antigravitySharedGeminiUsageFromAPI.utilization"
-            :resets-at="antigravitySharedGeminiUsageFromAPI.resetTime"
-            color="emerald"
-          />
-        </template>
-        <template v-else>
-          <UsageProgressBar
-            v-if="antigravity3ProUsageFromAPI !== null"
-            :label="t('admin.accounts.usageWindow.gemini3Pro')"
-            :title="t('admin.accounts.usageWindow.gemini3ProHint')"
-            :utilization="antigravity3ProUsageFromAPI.utilization"
-            :resets-at="antigravity3ProUsageFromAPI.resetTime"
-            color="indigo"
-          />
-          <UsageProgressBar
-            v-if="antigravity3FlashUsageFromAPI !== null"
-            :label="t('admin.accounts.usageWindow.gemini3Flash')"
-            :title="t('admin.accounts.usageWindow.gemini3FlashHint')"
-            :utilization="antigravity3FlashUsageFromAPI.utilization"
-            :resets-at="antigravity3FlashUsageFromAPI.resetTime"
-            color="emerald"
-          />
-          <UsageProgressBar
-            v-if="antigravity3ImageUsageFromAPI !== null"
-            :label="t('admin.accounts.usageWindow.gemini3Image')"
-            :title="t('admin.accounts.usageWindow.gemini3ImageHint')"
-            :utilization="antigravity3ImageUsageFromAPI.utilization"
-            :resets-at="antigravity3ImageUsageFromAPI.resetTime"
-            color="purple"
-          />
-        </template>
-
-        <!-- Claude -->
-        <UsageProgressBar
-          v-if="antigravityClaudeUsageFromAPI !== null"
-          :label="t('admin.accounts.usageWindow.claude')"
-          :title="t('admin.accounts.usageWindow.claudeHint')"
-          :utilization="antigravityClaudeUsageFromAPI.utilization"
-          :resets-at="antigravityClaudeUsageFromAPI.resetTime"
-          color="amber"
-        />
-
-        <div
-          v-if="antigravityLocalUsage7d"
-          class="flex items-center gap-1 pt-0.5 text-[9px] text-gray-500 dark:text-gray-400"
-          :title="t('admin.accounts.usageWindow.localWeeklyHint')"
-        >
-          <span class="w-[32px] shrink-0 rounded bg-gray-100 px-1 text-center font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-300">
-            7d
-          </span>
-          <span>{{ formatWindowRequests(antigravityLocalUsage7d) }} req</span>
-          <span>·</span>
-          <span>{{ formatWindowTokens(antigravityLocalUsage7d) }}</span>
-          <span>·</span>
-          <span>${{ formatWindowCost(antigravityLocalUsage7d) }}</span>
+        <div class="quota-window-grid grid grid-cols-2 gap-3">
+          <div class="space-y-1">
+            <div class="text-[10px] font-semibold text-gray-700 dark:text-gray-300">
+              {{ t('admin.accounts.usageWindow.gemini') }}
+            </div>
+            <UsageProgressBar
+              v-if="antigravityGemini5hUsageFromAPI"
+              :label="t('admin.accounts.usageWindow.fiveHourShort')"
+              :title="t('admin.accounts.usageWindow.gemini5hHint')"
+              :utilization="antigravityGemini5hUsageFromAPI.utilization"
+              :resets-at="antigravityGemini5hUsageFromAPI.resetTime"
+              color="emerald"
+            />
+            <UsageProgressBar
+              v-if="antigravityGemini7dUsageFromAPI"
+              :label="t('admin.accounts.usageWindow.sevenDayShort')"
+              :title="t('admin.accounts.usageWindow.gemini7dHint')"
+              :utilization="antigravityGemini7dUsageFromAPI.utilization"
+              :resets-at="antigravityGemini7dUsageFromAPI.resetTime"
+              color="emerald"
+            />
+          </div>
+          <div class="space-y-1">
+            <div class="text-[10px] font-semibold text-gray-700 dark:text-gray-300">
+              {{ t('admin.accounts.usageWindow.claude') }}
+            </div>
+            <UsageProgressBar
+              v-if="antigravityClaude5hUsageFromAPI"
+              :label="t('admin.accounts.usageWindow.fiveHourShort')"
+              :title="t('admin.accounts.usageWindow.claude5hHint')"
+              :utilization="antigravityClaude5hUsageFromAPI.utilization"
+              :resets-at="antigravityClaude5hUsageFromAPI.resetTime"
+              color="amber"
+            />
+            <UsageProgressBar
+              v-if="antigravityClaude7dUsageFromAPI"
+              :label="t('admin.accounts.usageWindow.sevenDayShort')"
+              :title="t('admin.accounts.usageWindow.claude7dHint')"
+              :utilization="antigravityClaude7dUsageFromAPI.utilization"
+              :resets-at="antigravityClaude7dUsageFromAPI.resetTime"
+              color="amber"
+            />
+          </div>
         </div>
 
         <div v-if="aiCreditsDisplay" class="mt-1 text-[10px] text-gray-500 dark:text-gray-400">
@@ -801,52 +785,30 @@ const getAntigravityUsageFromAPI = (
   }
 }
 
-// Gemini 3 Pro from API
-const antigravity3ProUsageFromAPI = computed(() =>
+const antigravityGemini5hUsageFromAPI = computed(() =>
+  getAntigravityUsageFromAPI(['gemini-5h', 'gemini:5h']) ??
   getAntigravityUsageFromAPI([
-    'gemini-pro-agent',
-    'gemini-3.1-pro-low', 'gemini-3.1-pro-high', 'gemini-3.1-pro-preview',
-    'gemini-3-pro-low', 'gemini-3-pro-high', 'gemini-3-pro-preview'
+    'gemini-pro-agent', 'gemini-3.1-pro-high', 'gemini-3.1-pro-low',
+    'gemini-3-flash', 'gemini-3-flash-agent', 'gemini-3.6-flash-tiered',
+    'gemini-3.1-flash-image'
   ])
 )
 
-// Gemini 3 Flash from API
-const antigravity3FlashUsageFromAPI = computed(() =>
-  getAntigravityUsageFromAPI([
-    'gemini-3-flash', 'gemini-3-flash-agent',
-    'gemini-3.5-flash-low', 'gemini-3.5-flash-extra-low',
-    'gemini-3.6-flash-tiered'
-  ])
+const antigravityGemini7dUsageFromAPI = computed(() =>
+  getAntigravityUsageFromAPI(['gemini-weekly', 'gemini:weekly'])
 )
 
-// Gemini Image from API
-const antigravity3ImageUsageFromAPI = computed(() =>
-  getAntigravityUsageFromAPI(['gemini-2.5-flash-image', 'gemini-3.1-flash-image', 'gemini-3-pro-image'])
-)
-
-const antigravitySharedGeminiUsageFromAPI = computed(() => {
-  const pools = [
-    antigravity3ProUsageFromAPI.value,
-    antigravity3FlashUsageFromAPI.value,
-    antigravity3ImageUsageFromAPI.value
-  ].filter((pool): pool is AntigravityUsageResult => pool !== null)
-
-  if (pools.length < 2) return null
-
-  const first = pools[0]
-  return pools.every(
-    (pool) => pool.utilization === first.utilization && pool.resetTime === first.resetTime
-  ) ? first : null
-})
-
-// Claude from API (all Claude model variants)
-const antigravityClaudeUsageFromAPI = computed(() =>
+const antigravityClaude5hUsageFromAPI = computed(() =>
+  getAntigravityUsageFromAPI(['3p-5h', 'claude:5h']) ??
   getAntigravityUsageFromAPI([
-    'claude-fable-5',
-    'claude-sonnet-4-5', 'claude-opus-4-5-thinking',
+    'claude-fable-5', 'claude-sonnet-4-5', 'claude-opus-4-5-thinking',
     'claude-sonnet-4-6', 'claude-opus-4-6', 'claude-opus-4-6-thinking',
-    'claude-opus-4-7', 'claude-opus-4-8',
+    'claude-opus-4-7', 'claude-opus-4-8'
   ])
+)
+
+const antigravityClaude7dUsageFromAPI = computed(() =>
+  getAntigravityUsageFromAPI(['3p-weekly', 'claude:weekly'])
 )
 
 const aiCreditsDisplay = computed(() => {
@@ -856,8 +818,6 @@ const aiCreditsDisplay = computed(() => {
   if (total <= 0) return null
   return total.toFixed(0)
 })
-
-const antigravityLocalUsage7d = computed(() => usageInfo.value?.antigravity_local_usage_7d ?? null)
 
 // Antigravity 账户类型（从 load_code_assist 响应中提取）
 const antigravityTier = computed(() => {

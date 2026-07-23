@@ -83,11 +83,44 @@ func (f *AntigravityQuotaFetcher) FetchQuota(ctx context.Context, account *Accou
 
 	// 转换为 UsageInfo
 	usageInfo := f.buildUsageInfo(modelsResp, tierRaw, tierNormalized, loadResp)
+	quotaSummary, summaryErr := client.RetrieveUserQuotaSummary(ctx, accessToken, projectID)
+	if summaryErr != nil {
+		slog.Warn("failed to fetch Antigravity quota summary", "error", summaryErr)
+	} else {
+		mergeAntigravityQuotaSummary(usageInfo, quotaSummary)
+	}
 
 	return &QuotaResult{
 		UsageInfo: usageInfo,
 		Raw:       modelsRaw,
 	}, nil
+}
+
+func mergeAntigravityQuotaSummary(info *UsageInfo, summary *antigravity.UserQuotaSummaryResponse) {
+	if info == nil || summary == nil {
+		return
+	}
+	if info.AntigravityQuota == nil {
+		info.AntigravityQuota = make(map[string]*AntigravityModelQuota)
+	}
+
+	for _, group := range summary.Groups {
+		for _, bucket := range group.Buckets {
+			if bucket.BucketID == "" || bucket.RemainingFraction == nil {
+				continue
+			}
+			remaining := *bucket.RemainingFraction
+			if remaining < 0 {
+				remaining = 0
+			} else if remaining > 1 {
+				remaining = 1
+			}
+			info.AntigravityQuota[bucket.BucketID] = &AntigravityModelQuota{
+				Utilization: int((1 - remaining) * 100),
+				ResetTime:   bucket.ResetTime,
+			}
+		}
+	}
 }
 
 // fetchSubscriptionTier 获取账号订阅等级，失败返回空字符串。

@@ -5,25 +5,12 @@ import (
 	"net/http"
 	"testing"
 	"time"
-
-	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
 )
 
 type accountUsageCodexProbeRepo struct {
 	stubOpenAIAccountRepo
 	updateExtraCh chan map[string]any
 	rateLimitCh   chan time.Time
-}
-
-type accountUsageWindowRepo struct {
-	UsageLogRepository
-	stats      *usagestats.AccountStats
-	startTimes []time.Time
-}
-
-func (r *accountUsageWindowRepo) GetAccountWindowStats(_ context.Context, _ int64, start time.Time) (*usagestats.AccountStats, error) {
-	r.startTimes = append(r.startTimes, start)
-	return r.stats, nil
 }
 
 func (r *accountUsageCodexProbeRepo) UpdateExtra(_ context.Context, _ int64, updates map[string]any) error {
@@ -268,28 +255,4 @@ func TestBuildCodexUsageProgressFromExtra_ZerosExpiredWindow(t *testing.T) {
 			t.Fatalf("expected Utilization=0 for expired 7d window, got %v", progress.Utilization)
 		}
 	})
-}
-
-func TestAntigravityLocalUsage7d(t *testing.T) {
-	t.Parallel()
-
-	now := time.Date(2026, 7, 23, 12, 0, 0, 0, time.UTC)
-	repo := &accountUsageWindowRepo{stats: &usagestats.AccountStats{
-		Requests:     42,
-		Tokens:       123456,
-		Cost:         1.25,
-		StandardCost: 1.5,
-		UserCost:     1.75,
-	}}
-
-	got := antigravityLocalUsage7d(context.Background(), repo, 7, now)
-	if got == nil {
-		t.Fatal("expected rolling 7-day usage")
-	}
-	if got.Requests != 42 || got.Tokens != 123456 || got.Cost != 1.25 {
-		t.Fatalf("unexpected rolling usage: %#v", got)
-	}
-	if len(repo.startTimes) != 1 || !repo.startTimes[0].Equal(now.Add(-7*24*time.Hour)) {
-		t.Fatalf("unexpected rolling window start: %#v", repo.startTimes)
-	}
 }

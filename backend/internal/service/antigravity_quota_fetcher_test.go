@@ -44,8 +44,33 @@ func TestNormalizeTier(t *testing.T) {
 // buildUsageInfo
 // ---------------------------------------------------------------------------
 
-func aqfBoolPtr(v bool) *bool { return &v }
-func aqfIntPtr(v int) *int    { return &v }
+func aqfBoolPtr(v bool) *bool        { return &v }
+func aqfIntPtr(v int) *int           { return &v }
+func aqfFloatPtr(v float64) *float64 { return &v }
+
+func TestMergeAntigravityQuotaSummary(t *testing.T) {
+	info := &UsageInfo{AntigravityQuota: map[string]*AntigravityModelQuota{
+		"gemini-3-flash": {Utilization: 7, ResetTime: "model-reset"},
+	}}
+	summary := &antigravity.UserQuotaSummaryResponse{Groups: []antigravity.UserQuotaSummaryGroup{
+		{Buckets: []antigravity.UserQuotaSummaryBucket{
+			{BucketID: "gemini-5h", RemainingFraction: aqfFloatPtr(0.9999454), ResetTime: "gemini-5h-reset"},
+			{BucketID: "gemini-weekly", RemainingFraction: aqfFloatPtr(0.18366112), ResetTime: "gemini-7d-reset"},
+		}},
+		{Buckets: []antigravity.UserQuotaSummaryBucket{
+			{BucketID: "3p-5h", RemainingFraction: aqfFloatPtr(1), ResetTime: "claude-5h-reset"},
+			{BucketID: "3p-weekly", RemainingFraction: aqfFloatPtr(0), ResetTime: "claude-7d-reset"},
+		}},
+	}}
+
+	mergeAntigravityQuotaSummary(info, summary)
+
+	require.Equal(t, 7, info.AntigravityQuota["gemini-3-flash"].Utilization)
+	require.Equal(t, 0, info.AntigravityQuota["gemini-5h"].Utilization)
+	require.Equal(t, 81, info.AntigravityQuota["gemini-weekly"].Utilization)
+	require.Equal(t, 0, info.AntigravityQuota["3p-5h"].Utilization)
+	require.Equal(t, 100, info.AntigravityQuota["3p-weekly"].Utilization)
+}
 
 func TestBuildUsageInfo_BasicModels(t *testing.T) {
 	fetcher := &AntigravityQuotaFetcher{}

@@ -17,6 +17,9 @@
                 class="input pl-10"
               />
             </div>
+            <p class="max-w-2xl text-xs leading-5 text-gray-500 dark:text-gray-400">
+              {{ t('availableChannels.pricingDisclaimer') }}
+            </p>
           </div>
 
           <div class="flex w-full flex-shrink-0 flex-wrap items-center justify-end gap-3 lg:w-auto">

@@ -63,11 +63,21 @@ export default {
       noKeysNotice: '您当前尚未创建 API 密钥，立即创建密钥即可开始调用模型。',
       createFirstKey: '创建 API 密钥',
       manageKeys: '管理 API 密钥',
+      search: '搜索模型',
+      searchPlaceholder: '搜索模型、用途或协议',
+      providerFilter: '按提供商筛选',
+      allProviders: '全部提供商',
+      noMatches: '没有符合搜索条件的支持模型。',
       protocol: '协议',
       endpoint: '端点',
       copyEndpoint: '复制端点',
       endpointCopied: '已复制端点',
-      purpose: '模型能力'
+      purpose: '模型能力',
+      context: '上下文窗口',
+      input: '输入',
+      output: '输出',
+      referencePricing: '参考定价',
+      pricingNote: '如有可用数据，参考价按每 100 万 token 展示。实际账单可能受分组倍率、订阅或账户专属费率影响；缓存读取、输入和输出价格分别计算。'
     }
   },
 
@@ -185,12 +195,18 @@ export default {
           '按 Win+R，输入 %userprofile%\\.codex 打开配置目录。如目录不存在，请先手动创建。'
       },
       cliTabs: {
+        general: '通用',
         claudeCode: 'Claude Code',
         geminiCli: 'Gemini CLI',
         codexCli: 'Codex CLI',
         codexCliWs: 'Codex CLI (WebSocket)',
         grokCli: 'Grok CLI',
         opencode: 'OpenCode'
+      },
+      general: {
+        description: '适用于任意 HTTP 客户端或 OpenAI 兼容 SDK 的通用指南。GPT 与原生 Gemini 请求使用不同的 Base URL 和认证请求头。',
+        connectionDetails: '连接信息',
+        note: 'GPT 模型请使用 OpenAI 兼容端点，Gemini 模型请使用原生 Gemini 端点。不要把 Gemini 模型 ID 发送到 /v1/chat/completions。'
       },
       antigravity: {
         description: '为 Antigravity 分组配置 API 访问。请根据您使用的客户端选择对应的配置方式。',
@@ -530,6 +546,7 @@ export default {
     empty: '暂无可用渠道',
     noModels: '未配置模型',
     noPricing: '未配置定价',
+    pricingDisclaimer: '模型提示框会在已配置时展示每 100 万 token 的参考价。实际账单可能因分组倍率、订阅、峰值倍率或账户专属费率而不同。',
     exclusive: '专属',
     public: '公开',
     exclusiveTooltip: '管理员授权给你的专属分组',

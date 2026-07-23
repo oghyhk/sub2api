@@ -42,10 +42,32 @@
       </router-link>
     </div>
 
+    <div class="mb-3 flex flex-col gap-2 sm:flex-row">
+      <label class="relative flex-1">
+        <span class="sr-only">{{ t('dashboard.modelCatalog.search') }}</span>
+        <Icon name="search" size="sm" class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#6e6e73] dark:text-[#98989d]" />
+        <input
+          v-model="searchQuery"
+          type="search"
+          :placeholder="t('dashboard.modelCatalog.searchPlaceholder')"
+          class="min-h-[44px] w-full rounded-[8px] border border-[#d2d2d7] bg-white pl-9 pr-3 text-sm text-[#1d1d1f] outline-none focus:border-[#0071e3] focus:ring-2 focus:ring-[#0071e3]/20 dark:border-[#2c2c2e] dark:bg-[#1c1c1e] dark:text-[#f5f5f7]"
+        />
+      </label>
+      <select
+        v-model="providerFilter"
+        :aria-label="t('dashboard.modelCatalog.providerFilter')"
+        class="min-h-[44px] rounded-[8px] border border-[#d2d2d7] bg-white px-3 text-sm text-[#1d1d1f] outline-none focus:border-[#0071e3] focus:ring-2 focus:ring-[#0071e3]/20 dark:border-[#2c2c2e] dark:bg-[#1c1c1e] dark:text-[#f5f5f7]"
+      >
+        <option value="all">{{ t('dashboard.modelCatalog.allProviders') }}</option>
+        <option value="gpt">GPT</option>
+        <option value="gemini">Gemini</option>
+      </select>
+    </div>
+
     <!-- Model catalog -->
     <div class="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-5">
       <button
-        v-for="m in PRODUCT_MODELS"
+        v-for="m in filteredModels"
         :key="m.id"
         @click="selectedModelId = m.id"
         :aria-pressed="selectedModelId === m.id"
@@ -65,6 +87,9 @@
         </span>
       </button>
     </div>
+    <p v-if="filteredModels.length === 0" class="py-4 text-sm text-[#6e6e73] dark:text-[#98989d]">
+      {{ t('dashboard.modelCatalog.noMatches') }}
+    </p>
 
     <!-- Selected Model Detail Workspace -->
     <div
@@ -73,12 +98,10 @@
       :style="{ borderColor: selectedModel.accent.accentHex }"
     >
       <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div class="flex items-center gap-2">
+        <div class="flex min-w-0 items-center gap-2">
           <span class="h-2.5 w-2.5 rounded-full" :class="selectedModel.accent.dotClass"></span>
           <span class="text-sm font-semibold text-[#1d1d1f] dark:text-[#f5f5f7]">{{ selectedModel.displayName }}</span>
-          <span class="rounded bg-white px-2 py-0.5 font-mono text-xs text-[#6e6e73] dark:bg-[#2c2c2e] dark:text-[#98989d]">
-            {{ selectedModel.protocol }}
-          </span>
+          <span class="truncate rounded bg-white px-2 py-0.5 font-mono text-xs text-[#6e6e73] dark:bg-[#2c2c2e] dark:text-[#98989d]">{{ selectedModel.protocol }}</span>
         </div>
         <div class="flex items-center gap-2 font-mono text-xs text-[#6e6e73] dark:text-[#98989d]">
           <span class="rounded bg-white px-2 py-1 select-all dark:bg-[#2c2c2e]">{{ selectedModel.endpointPath }}</span>
@@ -96,6 +119,13 @@
       <p class="mt-2 text-xs leading-relaxed text-[#6e6e73] dark:text-[#98989d]">
         {{ getModelPurpose(selectedModel, locale) }}
       </p>
+      <dl class="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs text-[#6e6e73] dark:text-[#98989d] sm:grid-cols-4">
+        <div><dt class="font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">{{ t('dashboard.modelCatalog.context') }}</dt><dd>{{ formatContext(selectedModel.contextWindow) }}</dd></div>
+        <div><dt class="font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">{{ t('dashboard.modelCatalog.input') }}</dt><dd>{{ selectedModel.inputModalities.join(', ') }}</dd></div>
+        <div><dt class="font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">{{ t('dashboard.modelCatalog.output') }}</dt><dd>{{ selectedModel.outputModalities.join(', ') }}</dd></div>
+        <div><dt class="font-medium text-[#1d1d1f] dark:text-[#f5f5f7]">{{ t('dashboard.modelCatalog.referencePricing') }}</dt><dd>{{ selectedModel.referencePricing?.source }}</dd></div>
+      </dl>
+      <p class="mt-2 text-[11px] text-[#6e6e73] dark:text-[#98989d]">{{ t('dashboard.modelCatalog.pricingNote') }}</p>
     </div>
   </section>
 </template>
@@ -117,8 +147,25 @@ withDefaults(
 
 const { t, locale } = useI18n()
 const selectedModelId = ref(DEFAULT_MODEL_ID)
-const selectedModel = computed(() => getModelById(selectedModelId.value))
 const copied = ref(false)
+const searchQuery = ref('')
+const providerFilter = ref<'all' | 'gpt' | 'gemini'>('all')
+const filteredModels = computed(() => {
+  const query = searchQuery.value.trim().toLowerCase()
+  return PRODUCT_MODELS.filter((model) => {
+    const providerMatch = providerFilter.value === 'all' || model.providerFamily === providerFilter.value
+    const textMatch = !query || [model.id, model.displayName, model.protocol, getModelPurpose(model, locale.value)].some((value) => value.toLowerCase().includes(query))
+    return providerMatch && textMatch
+  })
+})
+const selectedModel = computed(() => {
+  const selected = filteredModels.value.find((model) => model.id === selectedModelId.value)
+  return selected || filteredModels.value[0] || getModelById(selectedModelId.value)
+})
+
+function formatContext(value: number): string {
+  return `${new Intl.NumberFormat(locale.value).format(value)} tokens`
+}
 
 async function copyEndpoint(path: string) {
   try {

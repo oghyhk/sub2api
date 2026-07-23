@@ -21,6 +21,46 @@ vi.mock('@/composables/useClipboard', () => ({
 import UseKeyModal from '../UseKeyModal.vue'
 
 describe('UseKeyModal', () => {
+  it('provides a provider-agnostic General guide with distinct GPT and Gemini endpoints', async () => {
+    const wrapper = mount(UseKeyModal, {
+      props: {
+        show: true,
+        apiKey: 'sk-general-test',
+        baseUrl: 'https://example.com/v1',
+        platform: 'openai'
+      },
+      global: {
+        stubs: {
+          BaseDialog: { template: '<div><slot /><slot name="footer" /></div>' },
+          Icon: { template: '<span />' }
+        }
+      }
+    })
+
+    const generalTab = wrapper.findAll('button').find((button) =>
+      button.text().includes('keys.useKeyModal.cliTabs.general')
+    )
+    expect(generalTab).toBeDefined()
+    await generalTab!.trigger('click')
+    await wrapper.get('[data-testid="setup-os-linux"]').trigger('click')
+    await nextTick()
+
+    const content = wrapper.findAll('pre code').map((code) => code.text()).join('\n')
+    expect(content).toContain('Base URL (OpenAI-compatible): https://example.com/v1')
+    expect(content).toContain('Base URL (native Gemini): https://example.com/antigravity/v1beta')
+    expect(content).toContain('Authorization: Bearer sk-general-test')
+    expect(content).toContain('x-goog-api-key: sk-general-test')
+    expect(content).toContain('/chat/completions')
+    expect(content).toContain('/models/gemini-3.6-flash:generateContent')
+    expect(content).toContain('gpt-5.6-sol, gpt-5.6-terra, gpt-5.6-luna')
+    expect(content).toContain('gemini-3.1-pro, gemini-3.6-flash')
+
+    const instruction = wrapper.get('[data-testid="setup-instruction-content"]').text()
+    expect(instruction).toContain('OpenAI-compatible: https://example.com/v1')
+    expect(instruction).toContain('Native Gemini: https://example.com/antigravity/v1beta')
+    expect(instruction).toContain('sk-general-test')
+  })
+
   it('renders Grok Build and OpenCode setup for Grok groups', async () => {
     const wrapper = mount(UseKeyModal, {
       props: {

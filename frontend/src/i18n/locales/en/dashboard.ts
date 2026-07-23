@@ -63,11 +63,21 @@ export default {
       noKeysNotice: 'You do not have any active API keys yet. Create a key to start building.',
       createFirstKey: 'Create API Key',
       manageKeys: 'Manage API Keys',
+      search: 'Search models',
+      searchPlaceholder: 'Search model, use case, or protocol',
+      providerFilter: 'Filter by provider',
+      allProviders: 'All providers',
+      noMatches: 'No supported models match this search.',
       protocol: 'Protocol',
       endpoint: 'Endpoint',
       copyEndpoint: 'Copy Endpoint',
       endpointCopied: 'Endpoint copied',
-      purpose: 'Model Capabilities'
+      purpose: 'Model Capabilities',
+      context: 'Context window',
+      input: 'Input',
+      output: 'Output',
+      referencePricing: 'Reference pricing',
+      pricingNote: 'Reference prices are shown per 1 million tokens when available. Your billed price may differ because of group multipliers, subscriptions, or account-specific rates; cache-read, input, and output prices are separate.'
     }
   },
 
@@ -183,12 +193,18 @@ export default {
         noteWindows: 'Press Win+R and enter %userprofile%\\.codex to open the config directory. Create it manually if it does not exist.',
       },
       cliTabs: {
+        general: 'General',
         claudeCode: 'Claude Code',
         geminiCli: 'Gemini CLI',
         codexCli: 'Codex CLI',
         codexCliWs: 'Codex CLI (WebSocket)',
         grokCli: 'Grok CLI',
         opencode: 'OpenCode',
+      },
+      general: {
+        description: 'Use this provider-agnostic guide for any HTTP client or OpenAI-compatible SDK. GPT and native Gemini requests use different base URLs and authentication headers.',
+        connectionDetails: 'Connection details',
+        note: 'Use the OpenAI-compatible endpoint for GPT models and the native Gemini endpoint for Gemini models. Do not send a Gemini model ID to /v1/chat/completions.'
       },
       antigravity: {
         description: 'Configure API access for Antigravity group. Select the configuration method based on your client.',
@@ -524,6 +540,7 @@ export default {
     empty: 'No available channels',
     noModels: 'No models configured',
     noPricing: 'Pricing not configured',
+    pricingDisclaimer: 'Model popovers show reference prices per 1M tokens where configured. Your billed price may differ after group multipliers, subscriptions, peak rates, or account-specific rates.',
     exclusive: 'Exclusive',
     public: 'Public',
     exclusiveTooltip: 'Exclusive groups granted to you by an admin',

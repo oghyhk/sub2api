@@ -15,6 +15,15 @@ export interface ModelItem {
   purposeZh: string
   protocol: string
   endpointPath: string
+  contextWindow: number
+  inputModalities: readonly string[]
+  outputModalities: readonly string[]
+  referencePricing?: {
+    inputPerMillion: number | null
+    outputPerMillion: number | null
+    cacheReadPerMillion: number | null
+    source: string
+  }
   accent: ModelAccent
 }
 
@@ -28,6 +37,10 @@ export const PRODUCT_MODELS: readonly ModelItem[] = [
     purposeZh: '旗舰推理模型，适用于复杂分析、系统架构和高难度编码工作',
     protocol: 'OpenAI-compatible API',
     endpointPath: '/v1/chat/completions',
+    contextWindow: 358000,
+    inputModalities: ['text', 'image'],
+    outputModalities: ['text'],
+    referencePricing: { inputPerMillion: null, outputPerMillion: null, cacheReadPerMillion: null, source: 'Account pricing' },
     accent: {
       providerLabel: 'GPT',
       badgeTextClass: 'text-[#2b8a5e]',
@@ -45,6 +58,10 @@ export const PRODUCT_MODELS: readonly ModelItem[] = [
     purposeZh: '全能型通用模型，为日常生产负载进行优化',
     protocol: 'OpenAI-compatible API',
     endpointPath: '/v1/chat/completions',
+    contextWindow: 358000,
+    inputModalities: ['text', 'image'],
+    outputModalities: ['text'],
+    referencePricing: { inputPerMillion: null, outputPerMillion: null, cacheReadPerMillion: null, source: 'Account pricing' },
     accent: {
       providerLabel: 'GPT',
       badgeTextClass: 'text-[#2b8a5e]',
@@ -62,6 +79,10 @@ export const PRODUCT_MODELS: readonly ModelItem[] = [
     purposeZh: '快速轻量模型，适用于高吞吐和低延迟场景',
     protocol: 'OpenAI-compatible API',
     endpointPath: '/v1/chat/completions',
+    contextWindow: 358000,
+    inputModalities: ['text', 'image'],
+    outputModalities: ['text'],
+    referencePricing: { inputPerMillion: null, outputPerMillion: null, cacheReadPerMillion: null, source: 'Account pricing' },
     accent: {
       providerLabel: 'GPT',
       badgeTextClass: 'text-[#2b8a5e]',
@@ -79,6 +100,10 @@ export const PRODUCT_MODELS: readonly ModelItem[] = [
     purposeZh: 'Google 最强多模态模型，原生工具调用，支持 100 万上下文',
     protocol: 'Google Gemini API',
     endpointPath: '/antigravity/v1beta/models/gemini-3.1-pro:generateContent',
+    contextWindow: 1048576,
+    inputModalities: ['text', 'image', 'pdf'],
+    outputModalities: ['text'],
+    referencePricing: { inputPerMillion: null, outputPerMillion: null, cacheReadPerMillion: null, source: 'Account pricing' },
     accent: {
       providerLabel: 'Gemini',
       badgeTextClass: 'text-[#2563eb]',
@@ -96,6 +121,10 @@ export const PRODUCT_MODELS: readonly ModelItem[] = [
     purposeZh: '超高速推理，适用于实时流式和高并发任务',
     protocol: 'Google Gemini API',
     endpointPath: '/antigravity/v1beta/models/gemini-3.6-flash:generateContent',
+    contextWindow: 1048576,
+    inputModalities: ['text', 'image', 'pdf'],
+    outputModalities: ['text'],
+    referencePricing: { inputPerMillion: null, outputPerMillion: null, cacheReadPerMillion: null, source: 'Account pricing' },
     accent: {
       providerLabel: 'Gemini',
       badgeTextClass: 'text-[#2563eb]',

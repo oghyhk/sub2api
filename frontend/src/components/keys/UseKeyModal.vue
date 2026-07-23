@@ -400,9 +400,15 @@ const SparkleIcon = {
 
 const clientTabs = computed((): TabConfig[] => {
   if (!props.platform) return []
+  const generalTab: TabConfig = {
+    id: 'general',
+    label: t('keys.useKeyModal.cliTabs.general'),
+    icon: TerminalIcon
+  }
   switch (props.platform) {
     case 'openai': {
       const tabs: TabConfig[] = [
+        generalTab,
         { id: 'codex', label: t('keys.useKeyModal.cliTabs.codexCli'), icon: TerminalIcon },
         { id: 'codex-ws', label: t('keys.useKeyModal.cliTabs.codexCliWs'), icon: TerminalIcon },
       ]
@@ -414,17 +420,20 @@ const clientTabs = computed((): TabConfig[] => {
     }
     case 'gemini':
       return [
+        generalTab,
         { id: 'gemini', label: t('keys.useKeyModal.cliTabs.geminiCli'), icon: SparkleIcon },
         { id: 'opencode', label: t('keys.useKeyModal.cliTabs.opencode'), icon: TerminalIcon }
       ]
     case 'antigravity':
       return [
+        generalTab,
         { id: 'claude', label: t('keys.useKeyModal.cliTabs.claudeCode'), icon: TerminalIcon },
         { id: 'gemini', label: t('keys.useKeyModal.cliTabs.geminiCli'), icon: SparkleIcon },
         { id: 'opencode', label: t('keys.useKeyModal.cliTabs.opencode'), icon: TerminalIcon }
       ]
     case 'grok':
       return [
+        generalTab,
         { id: 'grok', label: t('keys.useKeyModal.cliTabs.grokCli'), icon: TerminalIcon },
         { id: 'claude', label: t('keys.useKeyModal.cliTabs.claudeCode'), icon: TerminalIcon },
         { id: 'codex', label: t('keys.useKeyModal.cliTabs.codexCli'), icon: TerminalIcon },
@@ -432,6 +441,7 @@ const clientTabs = computed((): TabConfig[] => {
       ]
     default:
       return [
+        generalTab,
         { id: 'claude', label: t('keys.useKeyModal.cliTabs.claudeCode'), icon: TerminalIcon },
         { id: 'opencode', label: t('keys.useKeyModal.cliTabs.opencode'), icon: TerminalIcon }
       ]
@@ -457,6 +467,9 @@ const currentTabs = computed(() => {
 })
 
 const platformDescription = computed(() => {
+  if (activeClientTab.value === 'general') {
+    return t('keys.useKeyModal.general.description')
+  }
   switch (props.platform) {
     case 'openai':
       if (activeClientTab.value === 'claude') {
@@ -484,6 +497,9 @@ const platformDescription = computed(() => {
 })
 
 const platformNote = computed(() => {
+  if (activeClientTab.value === 'general') {
+    return t('keys.useKeyModal.general.note')
+  }
   switch (props.platform) {
     case 'openai':
       if (activeClientTab.value === 'claude') {
@@ -563,6 +579,10 @@ const currentFiles = computed((): FileConfig[] => {
   const { baseUrl, baseRoot, apiBase, antigravityBase, antigravityGeminiBase, geminiBase } = resolvedUrls.value
   const apiKey = props.apiKey
 
+  if (activeClientTab.value === 'general') {
+    return generateGeneralFiles(baseRoot, apiBase, antigravityGeminiBase, apiKey)
+  }
+
   if (activeClientTab.value === 'opencode') {
     switch (props.platform) {
       case 'anthropic':
@@ -619,6 +639,9 @@ const currentOsLabel = computed(() =>
   osTabs.find((tab) => tab.id === activeTab.value)?.label || activeTab.value)
 
 const setupModels = computed(() => {
+  if (activeClientTab.value === 'general') {
+    return PRODUCT_MODELS.map((model) => model.id)
+  }
   if (props.platform === 'openai') {
     return PRODUCT_MODELS
       .filter((model) => activeClientTab.value === 'opencode' || model.providerFamily === 'gpt')
@@ -632,6 +655,7 @@ const setupModels = computed(() => {
 })
 
 const setupDefaultModel = computed(() => {
+  if (activeClientTab.value === 'general') return DEFAULT_MODEL_ID
   if (props.platform === 'openai') return DEFAULT_MODEL_ID
   if (props.platform === 'gemini' || (props.platform === 'antigravity' && activeClientTab.value === 'gemini')) {
     return 'gemini-3.6-flash'
@@ -642,6 +666,12 @@ const setupDefaultModel = computed(() => {
 
 const setupEndpoints = computed(() => {
   const urls = resolvedUrls.value
+  if (activeClientTab.value === 'general') {
+    return [
+      `OpenAI-compatible: ${urls.apiBase}`,
+      `Native Gemini: ${urls.antigravityGeminiBase}`
+    ]
+  }
   if (props.platform === 'openai' && activeClientTab.value === 'opencode') {
     return [`OpenAI: ${urls.apiBase}`, `Gemini: ${urls.antigravityGeminiBase}`]
   }
@@ -693,6 +723,61 @@ const setupInstruction = computed(() => {
   lines.push('', t('keys.useKeyModal.promptFinish'))
   return lines.join('\n')
 })
+
+function generateGeneralFiles(
+  baseRoot: string,
+  apiBase: string,
+  geminiBase: string,
+  apiKey: string
+): FileConfig[] {
+  const details = [
+    `Base URL (OpenAI-compatible): ${apiBase}`,
+    `Base URL (native Gemini): ${geminiBase}`,
+    'Authentication (OpenAI-compatible): Authorization: Bearer YOUR_API_KEY',
+    'Authentication (native Gemini): x-goog-api-key: YOUR_API_KEY',
+    'OpenAI-compatible endpoints: POST /chat/completions, POST /responses, GET /models',
+    'Native Gemini endpoint: POST /models/{model}:generateContent',
+    `GPT models: ${PRODUCT_MODELS.filter((model) => model.providerFamily === 'gpt').map((model) => model.id).join(', ')}`,
+    `Gemini models: ${PRODUCT_MODELS.filter((model) => model.providerFamily === 'gemini').map((model) => model.id).join(', ')}`,
+    `Service root: ${baseRoot}`
+  ].join('\n')
+
+  if (activeTab.value === 'windows') {
+    return [
+      { path: t('keys.useKeyModal.general.connectionDetails'), content: details },
+      {
+        path: 'PowerShell',
+        content: `$headers = @{ Authorization = "Bearer ${apiKey}" }
+$body = @{ model = "gpt-5.6-luna"; messages = @(@{ role = "user"; content = "Reply with OK" }) } | ConvertTo-Json -Depth 5
+Invoke-RestMethod -Method Post -Uri "${apiBase}/chat/completions" -Headers $headers -ContentType "application/json" -Body $body`
+      },
+      {
+        path: 'PowerShell',
+        content: `$headers = @{ "x-goog-api-key" = "${apiKey}" }
+$body = @{ contents = @(@{ parts = @(@{ text = "Reply with OK" }) }) } | ConvertTo-Json -Depth 6
+Invoke-RestMethod -Method Post -Uri "${geminiBase}/models/gemini-3.6-flash:generateContent" -Headers $headers -ContentType "application/json" -Body $body`
+      }
+    ]
+  }
+
+  return [
+    { path: t('keys.useKeyModal.general.connectionDetails'), content: details },
+    {
+      path: 'Terminal',
+      content: `curl "${apiBase}/chat/completions" \\
+  -H "Authorization: Bearer ${apiKey}" \\
+  -H "Content-Type: application/json" \\
+  -d '{"model":"gpt-5.6-luna","messages":[{"role":"user","content":"Reply with OK"}]}'`
+    },
+    {
+      path: 'Terminal',
+      content: `curl "${geminiBase}/models/gemini-3.6-flash:generateContent" \\
+  -H "x-goog-api-key: ${apiKey}" \\
+  -H "Content-Type: application/json" \\
+  -d '{"contents":[{"parts":[{"text":"Reply with OK"}]}]}'`
+    }
+  ]
+}
 
 function generateAnthropicFiles(baseUrl: string, apiKey: string): FileConfig[] {
   let path: string

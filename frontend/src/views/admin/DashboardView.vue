@@ -334,6 +334,54 @@
               </div>
             </div>
           </div>
+
+          <!-- Recent Request Logs -->
+          <div class="card overflow-hidden">
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-4 py-3 dark:border-dark-700">
+              <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+                {{ t('admin.dashboard.recentRequests') }}
+              </h3>
+              <div class="flex items-center gap-2">
+                <button
+                  type="button"
+                  class="btn btn-secondary px-2"
+                  :disabled="recentRequestsLoading"
+                  :title="t('common.refresh')"
+                  :aria-label="t('common.refresh')"
+                  @click="loadRecentRequests"
+                >
+                  <Icon
+                    name="refresh"
+                    size="sm"
+                    :class="{ 'animate-spin': recentRequestsLoading }"
+                  />
+                </button>
+                <button type="button" class="btn btn-secondary" @click="router.push('/admin/usage')">
+                  {{ t('admin.dashboard.viewAllUsage') }}
+                  <Icon name="arrowRight" size="sm" />
+                </button>
+              </div>
+            </div>
+            <div
+              v-if="recentRequestsError"
+              class="flex flex-col items-center justify-center gap-3 px-4 py-10 text-center"
+            >
+              <p class="text-sm text-gray-500 dark:text-gray-400">
+                {{ t('admin.dashboard.failedToLoadRequests') }}
+              </p>
+              <button type="button" class="btn btn-secondary" @click="loadRecentRequests">
+                {{ t('admin.dashboard.retry') }}
+              </button>
+            </div>
+            <UsageTable
+              v-else
+              :data="recentRequests"
+              :columns="recentRequestColumns"
+              :loading="recentRequestsLoading"
+              :show-upstream-endpoint="false"
+              flat
+            />
+          </div>
         </div>
       </template>
     </div>
@@ -353,8 +401,10 @@ import type {
   TrendDataPoint,
   ModelStat,
   UserUsageTrendPoint,
-  UserSpendingRankingItem
+  UserSpendingRankingItem,
+  AdminUsageLog
 } from '@/types'
+import type { Column } from '@/components/common/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -362,6 +412,7 @@ import DateRangePicker from '@/components/common/DateRangePicker.vue'
 import Select from '@/components/common/Select.vue'
 import ModelDistributionChart from '@/components/charts/ModelDistributionChart.vue'
 import TokenUsageTrend from '@/components/charts/TokenUsageTrend.vue'
+import UsageTable from '@/components/admin/usage/UsageTable.vue'
 import { useBatchImageAccess } from '@/composables/useBatchImageAccess'
 
 import {
@@ -396,12 +447,15 @@ const chartsLoading = ref(false)
 const userTrendLoading = ref(false)
 const rankingLoading = ref(false)
 const rankingError = ref(false)
+const recentRequestsLoading = ref(false)
+const recentRequestsError = ref(false)
 
 // Chart data
 const trendData = ref<TrendDataPoint[]>([])
 const modelStats = ref<ModelStat[]>([])
 const userTrend = ref<UserUsageTrendPoint[]>([])
 const rankingItems = ref<UserSpendingRankingItem[]>([])
+const recentRequests = ref<AdminUsageLog[]>([])
 const rankingTotalActualCost = ref(0)
 const rankingTotalRequests = ref(0)
 const rankingTotalTokens = ref(0)
@@ -434,6 +488,17 @@ const endDate = ref(defaultRange.end)
 const granularityOptions = computed(() => [
   { value: 'day', label: t('admin.dashboard.day') },
   { value: 'hour', label: t('admin.dashboard.hour') }
+])
+
+const recentRequestColumns = computed<Column[]>(() => [
+  { key: 'created_at', label: t('usage.time') },
+  { key: 'request_id', label: t('admin.dashboard.requestId') },
+  { key: 'user', label: t('admin.usage.user') },
+  { key: 'model', label: t('usage.model') },
+  { key: 'account', label: t('admin.usage.account') },
+  { key: 'stream', label: t('usage.type') },
+  { key: 'tokens', label: t('usage.tokens') },
+  { key: 'latency', label: t('usage.latency') }
 ])
 
 // Dark mode detection
@@ -732,11 +797,33 @@ const loadUserSpendingRanking = async () => {
   }
 }
 
+const loadRecentRequests = async () => {
+  recentRequestsLoading.value = true
+  recentRequestsError.value = false
+  try {
+    const response = await adminAPI.usage.list({
+      page: 1,
+      page_size: 10,
+      exact_total: false,
+      sort_by: 'created_at',
+      sort_order: 'desc'
+    })
+    recentRequests.value = response.items || []
+  } catch (error) {
+    console.error('Error loading recent requests:', error)
+    recentRequests.value = []
+    recentRequestsError.value = true
+  } finally {
+    recentRequestsLoading.value = false
+  }
+}
+
 const loadDashboardStats = async () => {
   await Promise.all([
     loadDashboardSnapshot(true),
     loadUsersTrend(),
-    loadUserSpendingRanking()
+    loadUserSpendingRanking(),
+    loadRecentRequests()
   ])
 }
 

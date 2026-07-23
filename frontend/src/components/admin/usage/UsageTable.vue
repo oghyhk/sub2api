@@ -44,6 +44,15 @@
           </div>
         </template>
 
+        <template #cell-request_id="{ row }">
+          <span
+            class="block max-w-[180px] truncate font-mono text-xs text-gray-600 dark:text-gray-400"
+            :title="row.request_id || undefined"
+          >
+            {{ row.request_id || '-' }}
+          </span>
+        </template>
+
         <template #cell-api_key="{ row }">
           <span class="text-sm text-gray-900 dark:text-white">{{ row.api_key?.name || '-' }}</span>
         </template>

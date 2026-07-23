@@ -5,10 +5,11 @@ import { createPinia, setActivePinia } from 'pinia'
 import type { DashboardStats } from '@/types'
 import DashboardView from '../DashboardView.vue'
 
-const { getSnapshotV2, getUserUsageTrend, getUserSpendingRanking } = vi.hoisted(() => ({
+const { getSnapshotV2, getUserUsageTrend, getUserSpendingRanking, listUsage } = vi.hoisted(() => ({
   getSnapshotV2: vi.fn(),
   getUserUsageTrend: vi.fn(),
-  getUserSpendingRanking: vi.fn()
+  getUserSpendingRanking: vi.fn(),
+  listUsage: vi.fn()
 }))
 
 vi.mock('@/api/admin', () => ({
@@ -17,6 +18,9 @@ vi.mock('@/api/admin', () => ({
       getSnapshotV2,
       getUserUsageTrend,
       getUserSpendingRanking
+    },
+    usage: {
+      list: listUsage
     }
   }
 }))
@@ -93,6 +97,7 @@ describe('admin DashboardView', () => {
     getSnapshotV2.mockReset()
     getUserUsageTrend.mockReset()
     getUserSpendingRanking.mockReset()
+    listUsage.mockReset()
 
     getSnapshotV2.mockResolvedValue({
       stats: createDashboardStats(),
@@ -113,6 +118,13 @@ describe('admin DashboardView', () => {
       start_date: '',
       end_date: ''
     })
+    listUsage.mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      page_size: 10,
+      total_pages: 0
+    })
   })
 
   it('uses last 24 hours as default dashboard range', async () => {
@@ -126,6 +138,7 @@ describe('admin DashboardView', () => {
           Select: true,
           ModelDistributionChart: true,
           TokenUsageTrend: true,
+          UsageTable: true,
           Line: true
         }
       }
@@ -142,5 +155,34 @@ describe('admin DashboardView', () => {
       end_date: formatLocalDate(now),
       granularity: 'hour'
     }))
+  })
+
+  it('loads the latest persisted request logs', async () => {
+    mount(DashboardView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          LoadingSpinner: true,
+          Icon: true,
+          DateRangePicker: true,
+          Select: true,
+          ModelDistributionChart: true,
+          TokenUsageTrend: true,
+          UsageTable: true,
+          Line: true
+        }
+      }
+    })
+
+    await flushPromises()
+
+    expect(listUsage).toHaveBeenCalledTimes(1)
+    expect(listUsage).toHaveBeenCalledWith({
+      page: 1,
+      page_size: 10,
+      exact_total: false,
+      sort_by: 'created_at',
+      sort_order: 'desc'
+    })
   })
 })

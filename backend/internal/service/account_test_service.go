@@ -178,6 +178,11 @@ func createTestPayload(modelID string) (map[string]any, error) {
 // modelID is optional - if empty, defaults to claude.DefaultTestModel
 // mode is optional - "compact" routes OpenAI accounts to the /responses/compact probe path
 func (s *AccountTestService) TestAccountConnection(c *gin.Context, accountID int64, modelID string, prompt string, mode string) error {
+	return s.TestAccountConnectionWithReasoning(c, accountID, modelID, prompt, mode, "")
+}
+
+// TestAccountConnectionWithReasoning runs a manual account test with an optional OpenAI reasoning effort.
+func (s *AccountTestService) TestAccountConnectionWithReasoning(c *gin.Context, accountID int64, modelID string, prompt string, mode string, reasoningEffort string) error {
 	ctx := c.Request.Context()
 
 	// Get account
@@ -188,7 +193,7 @@ func (s *AccountTestService) TestAccountConnection(c *gin.Context, accountID int
 
 	// Route to platform-specific test method
 	if account.IsOpenAI() {
-		return s.testOpenAIAccountConnection(c, account, modelID, prompt, normalizeAccountTestMode(mode))
+		return s.testOpenAIAccountConnectionWithReasoning(c, account, modelID, prompt, normalizeAccountTestMode(mode), reasoningEffort)
 	}
 
 	if account.IsGemini() {
@@ -502,6 +507,10 @@ func (s *AccountTestService) testBedrockAccountConnection(c *gin.Context, ctx co
 
 // testOpenAIAccountConnection tests an OpenAI account's connection
 func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account *Account, modelID string, prompt string, mode string) error {
+	return s.testOpenAIAccountConnectionWithReasoning(c, account, modelID, prompt, mode, "")
+}
+
+func (s *AccountTestService) testOpenAIAccountConnectionWithReasoning(c *gin.Context, account *Account, modelID string, prompt string, mode string, reasoningEffort string) error {
 	ctx := c.Request.Context()
 	mode = normalizeAccountTestMode(mode)
 
@@ -593,7 +602,7 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 	if isOAuth {
 		upstreamTestModelID = normalizeOpenAIModelForUpstream(credentialAccount, testModelID)
 	}
-	payload := createOpenAITestPayload(upstreamTestModelID, isOAuth)
+	payload := createOpenAITestPayloadWithOptions(upstreamTestModelID, isOAuth, prompt, reasoningEffort)
 	payloadBytes, _ := json.Marshal(payload)
 
 	// Send test_start event once. A task-invalid Agent Identity response may
@@ -674,7 +683,7 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 				return s.sendErrorAndEnd(c, fmt.Sprintf("Agent Identity task recovery failed: %s", err.Error()))
 			}
 			c.Request = c.Request.WithContext(markAgentIdentityTaskRecoveryTried(ctx))
-			return s.testOpenAIAccountConnection(c, account, modelID, prompt, mode)
+			return s.testOpenAIAccountConnectionWithReasoning(c, account, modelID, prompt, mode, reasoningEffort)
 		}
 		if resp.StatusCode == http.StatusTooManyRequests {
 			s.reconcileOpenAI429State(ctx, account, resp.Header, body)
@@ -1426,6 +1435,15 @@ func (s *AccountTestService) processGeminiStream(c *gin.Context, body io.Reader)
 
 // createOpenAITestPayload creates a test payload for OpenAI Responses API
 func createOpenAITestPayload(modelID string, isOAuth bool) map[string]any {
+	return createOpenAITestPayloadWithOptions(modelID, isOAuth, "", "")
+}
+
+func createOpenAITestPayloadWithOptions(modelID string, isOAuth bool, prompt string, reasoningEffort string) map[string]any {
+	testPrompt := strings.TrimSpace(prompt)
+	if testPrompt == "" {
+		testPrompt = "hi"
+	}
+
 	payload := map[string]any{
 		"model": modelID,
 		"input": []map[string]any{
@@ -1434,7 +1452,7 @@ func createOpenAITestPayload(modelID string, isOAuth bool) map[string]any {
 				"content": []map[string]any{
 					{
 						"type": "input_text",
-						"text": "hi",
+						"text": testPrompt,
 					},
 				},
 			},
@@ -1449,6 +1467,10 @@ func createOpenAITestPayload(modelID string, isOAuth bool) map[string]any {
 
 	// All accounts require instructions for Responses API
 	payload["instructions"] = openai.DefaultInstructions
+
+	if effort := NormalizeMaxReasoningEffort(reasoningEffort); effort != "" {
+		payload["reasoning"] = map[string]any{"effort": effort}
+	}
 
 	return payload
 }

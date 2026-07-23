@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 	"unsafe"
@@ -712,6 +713,9 @@ type GatewayService struct {
 	tlsFPProfileService   *TLSFingerprintProfileService
 	balanceNotifyService  *BalanceNotifyService
 	userPlatformQuotaRepo UserPlatformQuotaRepository
+	accountUsageService   *AccountUsageService
+	weeklyWarmupRefreshMu sync.Mutex
+	weeklyWarmupRefreshAt map[int64]time.Time
 }
 
 // NewGatewayService creates a new GatewayService
@@ -743,6 +747,7 @@ func NewGatewayService(
 	resolver *ModelPricingResolver,
 	balanceNotifyService *BalanceNotifyService,
 	userPlatformQuotaRepo UserPlatformQuotaRepository,
+	accountUsageService *AccountUsageService,
 ) *GatewayService {
 	userGroupRateTTL := resolveUserGroupRateCacheTTL(cfg)
 	modelsListTTL := resolveModelsListCacheTTL(cfg)
@@ -779,6 +784,8 @@ func NewGatewayService(
 		resolver:              resolver,
 		balanceNotifyService:  balanceNotifyService,
 		userPlatformQuotaRepo: userPlatformQuotaRepo,
+		accountUsageService:   accountUsageService,
+		weeklyWarmupRefreshAt: make(map[int64]time.Time),
 	}
 	svc.userGroupRateResolver = newUserGroupRateResolver(
 		userGroupRateRepo,

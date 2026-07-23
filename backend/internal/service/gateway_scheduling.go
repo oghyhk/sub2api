@@ -212,6 +212,7 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 	}
 	ctx = s.withWindowCostPrefetch(ctx, accounts)
 	ctx = s.withRPMPrefetch(ctx, accounts)
+	s.scheduleAntigravityWeeklyUsageRefresh(accounts, requestedModel, time.Now())
 
 	// 提前构建 accountByID（供 Layer 1 和 Layer 1.5 使用）
 	accountByID := make(map[int64]*Account, len(accounts))
@@ -308,8 +309,13 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 		}
 
 		if len(routingCandidates) > 0 {
+			routingWarmup, _ := partitionWeeklyWarmupAccounts(routingCandidates, requestedModel, time.Now())
+			routingWarmupActive := len(routingWarmup) > 0
+			if routingWarmupActive {
+				routingCandidates = routingWarmup
+			}
 			// 1.5. 在路由账号范围内检查粘性会话
-			if sessionHash != "" && stickyAccountID > 0 {
+			if !routingWarmupActive && sessionHash != "" && stickyAccountID > 0 {
 				slog.Debug("sticky.layer1_5_checking",
 					"sticky_account_id", stickyAccountID,
 					"in_routing_list", containsInt64(routingAccountIDs, stickyAccountID),
@@ -485,9 +491,10 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 			logger.LegacyPrintf("service.gateway", "[ModelRouting] All routed accounts unavailable for model=%s, falling back to normal selection", requestedModel)
 		}
 	}
+	warmupCandidateIDs := s.gatewayWeeklyWarmupCandidateIDs(ctx, accounts, platform, useMixed, requestedModel, excludedIDs)
 
 	// ============ Layer 1.5: 粘性会话（仅在无模型路由配置时生效） ============
-	if len(routingAccountIDs) == 0 && sessionHash != "" && stickyAccountID > 0 && !isExcluded(stickyAccountID) {
+	if len(routingAccountIDs) == 0 && len(warmupCandidateIDs) == 0 && sessionHash != "" && stickyAccountID > 0 && !isExcluded(stickyAccountID) {
 		accountID := stickyAccountID
 		if accountID > 0 && !isExcluded(accountID) {
 			account, ok := accountByID[accountID]
@@ -590,7 +597,7 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 				)
 			}
 		}
-	} else if len(routingAccountIDs) == 0 && sessionHash != "" {
+	} else if len(routingAccountIDs) == 0 && len(warmupCandidateIDs) == 0 && sessionHash != "" {
 		slog.Debug("sticky.layer1_5_no_routing_skip",
 			"sticky_account_id", stickyAccountID,
 			"is_excluded", func() bool { return stickyAccountID > 0 && isExcluded(stickyAccountID) }(),
@@ -643,6 +650,11 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 		// RPM 检查（非粘性会话路径）
 		if !s.isAccountSchedulableForRPM(ctx, acc, false) {
 			continue
+		}
+		if len(warmupCandidateIDs) > 0 {
+			if _, warmup := warmupCandidateIDs[acc.ID]; !warmup {
+				continue
+			}
 		}
 		candidates = append(candidates, acc)
 	}
@@ -737,6 +749,35 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 		})
 	}
 	return nil, ErrNoAvailableAccounts
+}
+
+func (s *GatewayService) gatewayWeeklyWarmupCandidateIDs(
+	ctx context.Context,
+	accounts []Account,
+	platform string,
+	useMixed bool,
+	requestedModel string,
+	excludedIDs map[int64]struct{},
+) map[int64]struct{} {
+	warmup := make(map[int64]struct{})
+	now := time.Now()
+	for i := range accounts {
+		account := &accounts[i]
+		if _, excluded := excludedIDs[account.ID]; excluded ||
+			!s.isAccountSchedulableForSelection(account) ||
+			!s.isAccountAllowedForPlatform(account, platform, useMixed) ||
+			(requestedModel != "" && !s.isModelSupportedByAccountWithContext(ctx, account, requestedModel)) ||
+			!s.isAccountSchedulableForModelSelection(ctx, account, requestedModel) ||
+			!s.isAccountSchedulableForQuota(account) ||
+			!s.isAccountSchedulableForWindowCost(ctx, account, false) ||
+			!s.isAccountSchedulableForRPM(ctx, account, false) {
+			continue
+		}
+		if isWeeklyWarmupAccount(account, requestedModel, now) {
+			warmup[account.ID] = struct{}{}
+		}
+	}
+	return warmup
 }
 
 func (s *GatewayService) tryAcquireByLegacyOrder(ctx context.Context, candidates []*Account, groupID *int64, sessionHash string, preferOAuth bool) (*AccountSelectionResult, bool, error) {
@@ -1726,17 +1767,40 @@ func (s *GatewayService) selectAccountForModelWithPlatform(ctx context.Context, 
 
 	var accounts []Account
 	accountsLoaded := false
+	var warmupCandidateIDs map[int64]struct{}
+	if platform == PlatformAntigravity {
+		forcePlatform, hasForcePlatform := ctx.Value(ctxkey.ForcePlatform).(string)
+		if hasForcePlatform && forcePlatform == "" {
+			hasForcePlatform = false
+		}
+		var err error
+		accounts, _, err = s.listSchedulableAccounts(ctx, groupID, platform, hasForcePlatform)
+		if err == nil {
+			accountsLoaded = true
+			ctx = s.withWindowCostPrefetch(ctx, accounts)
+			ctx = s.withRPMPrefetch(ctx, accounts)
+			s.scheduleAntigravityWeeklyUsageRefresh(accounts, requestedModel, time.Now())
+			warmupCandidateIDs = s.gatewayWeeklyWarmupCandidateIDs(ctx, accounts, platform, false, requestedModel, excludedIDs)
+		}
+	}
 
 	// ============ Model Routing (legacy path): apply before sticky session ============
 	// When load-awareness is disabled (e.g. concurrency service not configured), we still honor model routing
 	// so switching model can switch upstream account within the same sticky session.
 	if len(routingAccountIDs) > 0 {
+		routingWarmupActive := false
+		for _, accountID := range routingAccountIDs {
+			if _, warmup := warmupCandidateIDs[accountID]; warmup {
+				routingWarmupActive = true
+				break
+			}
+		}
 		if s.debugModelRoutingEnabled() {
 			logger.LegacyPrintf("service.gateway", "[ModelRoutingDebug] legacy routed begin: group_id=%v model=%s platform=%s session=%s routed_ids=%v",
 				derefGroupID(groupID), requestedModel, platform, shortSessionHash(sessionHash), routingAccountIDs)
 		}
 		// 1) Sticky session only applies if the bound account is within the routing set.
-		if sessionHash != "" && s.cache != nil {
+		if !routingWarmupActive && sessionHash != "" && s.cache != nil {
 			accountID, err := s.cache.GetSessionAccountID(ctx, derefGroupID(groupID), sessionHash)
 			if err == nil && accountID > 0 && containsInt64(routingAccountIDs, accountID) {
 				if _, excluded := excludedIDs[accountID]; !excluded {
@@ -1789,6 +1853,11 @@ func (s *GatewayService) selectAccountForModelWithPlatform(ctx context.Context, 
 			}
 			if _, excluded := excludedIDs[acc.ID]; excluded {
 				continue
+			}
+			if routingWarmupActive {
+				if _, warmup := warmupCandidateIDs[acc.ID]; !warmup {
+					continue
+				}
 			}
 			// Scheduler snapshots can be temporarily stale; re-check schedulability here to
 			// avoid selecting accounts that were recently rate-limited/overloaded.
@@ -1855,7 +1924,7 @@ func (s *GatewayService) selectAccountForModelWithPlatform(ctx context.Context, 
 	}
 
 	// 1. 查询粘性会话
-	if sessionHash != "" && s.cache != nil {
+	if len(warmupCandidateIDs) == 0 && sessionHash != "" && s.cache != nil {
 		accountID, err := s.cache.GetSessionAccountID(ctx, derefGroupID(groupID), sessionHash)
 		if err == nil && accountID > 0 {
 			if _, excluded := excludedIDs[accountID]; !excluded {
@@ -1930,6 +1999,11 @@ func (s *GatewayService) selectAccountForModelWithPlatform(ctx context.Context, 
 		if !s.isAccountSchedulableForRPM(ctx, acc, false) {
 			continue
 		}
+		if len(warmupCandidateIDs) > 0 {
+			if _, warmup := warmupCandidateIDs[acc.ID]; !warmup {
+				continue
+			}
+		}
 		if selected == nil {
 			selected = acc
 			continue
@@ -1985,16 +2059,31 @@ func (s *GatewayService) selectAccountWithMixedScheduling(ctx context.Context, g
 	}
 
 	var accounts []Account
-	accountsLoaded := false
+	accounts, _, err := s.listSchedulableAccounts(ctx, groupID, nativePlatform, false)
+	accountsLoaded := err == nil
+	var warmupCandidateIDs map[int64]struct{}
+	if accountsLoaded {
+		ctx = s.withWindowCostPrefetch(ctx, accounts)
+		ctx = s.withRPMPrefetch(ctx, accounts)
+		s.scheduleAntigravityWeeklyUsageRefresh(accounts, requestedModel, time.Now())
+		warmupCandidateIDs = s.gatewayWeeklyWarmupCandidateIDs(ctx, accounts, nativePlatform, true, requestedModel, excludedIDs)
+	}
 
 	// ============ Model Routing (legacy path): apply before sticky session ============
 	if len(routingAccountIDs) > 0 {
+		routingWarmupActive := false
+		for _, accountID := range routingAccountIDs {
+			if _, warmup := warmupCandidateIDs[accountID]; warmup {
+				routingWarmupActive = true
+				break
+			}
+		}
 		if s.debugModelRoutingEnabled() {
 			logger.LegacyPrintf("service.gateway", "[ModelRoutingDebug] legacy mixed routed begin: group_id=%v model=%s platform=%s session=%s routed_ids=%v",
 				derefGroupID(groupID), requestedModel, nativePlatform, shortSessionHash(sessionHash), routingAccountIDs)
 		}
 		// 1) Sticky session only applies if the bound account is within the routing set.
-		if sessionHash != "" && s.cache != nil {
+		if !routingWarmupActive && sessionHash != "" && s.cache != nil {
 			accountID, err := s.cache.GetSessionAccountID(ctx, derefGroupID(groupID), sessionHash)
 			if err == nil && accountID > 0 && containsInt64(routingAccountIDs, accountID) {
 				if _, excluded := excludedIDs[accountID]; !excluded {
@@ -2019,12 +2108,14 @@ func (s *GatewayService) selectAccountWithMixedScheduling(ctx context.Context, g
 		}
 
 		// 2) Select an account from the routed candidates.
-		var err error
-		accounts, _, err = s.listSchedulableAccounts(ctx, groupID, nativePlatform, false)
-		if err != nil {
-			return nil, fmt.Errorf("query accounts failed: %w", err)
+		if !accountsLoaded {
+			var err error
+			accounts, _, err = s.listSchedulableAccounts(ctx, groupID, nativePlatform, false)
+			if err != nil {
+				return nil, fmt.Errorf("query accounts failed: %w", err)
+			}
+			accountsLoaded = true
 		}
-		accountsLoaded = true
 
 		// 提前预取窗口费用+RPM 计数，确保 routing 段内的调度检查调用能命中缓存
 		ctx = s.withWindowCostPrefetch(ctx, accounts)
@@ -2045,6 +2136,11 @@ func (s *GatewayService) selectAccountWithMixedScheduling(ctx context.Context, g
 			}
 			if _, excluded := excludedIDs[acc.ID]; excluded {
 				continue
+			}
+			if routingWarmupActive {
+				if _, warmup := warmupCandidateIDs[acc.ID]; !warmup {
+					continue
+				}
 			}
 			// Scheduler snapshots can be temporarily stale; re-check schedulability here to
 			// avoid selecting accounts that were recently rate-limited/overloaded.
@@ -2115,7 +2211,7 @@ func (s *GatewayService) selectAccountWithMixedScheduling(ctx context.Context, g
 	}
 
 	// 1. 查询粘性会话
-	if sessionHash != "" && s.cache != nil {
+	if len(warmupCandidateIDs) == 0 && sessionHash != "" && s.cache != nil {
 		accountID, err := s.cache.GetSessionAccountID(ctx, derefGroupID(groupID), sessionHash)
 		if err == nil && accountID > 0 {
 			if _, excluded := excludedIDs[accountID]; !excluded {
@@ -2190,6 +2286,11 @@ func (s *GatewayService) selectAccountWithMixedScheduling(ctx context.Context, g
 		}
 		if !s.isAccountSchedulableForRPM(ctx, acc, false) {
 			continue
+		}
+		if len(warmupCandidateIDs) > 0 {
+			if _, warmup := warmupCandidateIDs[acc.ID]; !warmup {
+				continue
+			}
 		}
 		if selected == nil {
 			selected = acc

@@ -3,6 +3,7 @@ package service
 import (
 	"container/heap"
 	"context"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"log/slog"
@@ -20,10 +21,13 @@ import (
 
 const (
 	openAIAccountScheduleLayerPreviousResponse = "previous_response_id"
+	openAIAccountScheduleLayerWeeklyWarmup     = "weekly_warmup"
 	openAIAccountScheduleLayerSessionSticky    = "session_hash"
 	openAIAccountScheduleLayerLoadBalance      = "load_balance"
 	openAIAdvancedSchedulerSettingKey          = "openai_advanced_scheduler_enabled"
 )
+
+var errNoOpenAIWeeklyWarmupCandidates = errors.New("no OpenAI weekly warm-up candidates")
 
 const (
 	openAIAdvancedSchedulerSettingCacheTTL  = 5 * time.Second
@@ -83,6 +87,7 @@ type OpenAIAccountScheduleRequest struct {
 	RequiredImageCapability OpenAIImagesCapability
 	RequireCompact          bool
 	ExcludedIDs             map[int64]struct{}
+	weeklyWarmupOnly        bool
 }
 
 type OpenAIAccountScheduleDecision struct {
@@ -163,7 +168,7 @@ func (m *openAIAccountSchedulerMetrics) recordSelect(decision OpenAIAccountSched
 	if decision.StickySessionHit {
 		m.stickySessionHitTotal.Add(1)
 	}
-	if decision.Layer == openAIAccountScheduleLayerLoadBalance {
+	if decision.Layer == openAIAccountScheduleLayerLoadBalance || decision.Layer == openAIAccountScheduleLayerWeeklyWarmup {
 		m.loadBalanceSelectTotal.Add(1)
 	}
 }
@@ -409,6 +414,22 @@ func (s *defaultOpenAIAccountScheduler) Select(
 			}
 			return selection, decision, nil
 		}
+	}
+
+	warmupReq := req
+	warmupReq.weeklyWarmupOnly = true
+	warmupSelection, candidateCount, topK, loadSkew, warmupErr := s.selectByLoadBalance(ctx, warmupReq)
+	if warmupErr != nil && !errors.Is(warmupErr, errNoOpenAIWeeklyWarmupCandidates) {
+		return nil, decision, warmupErr
+	}
+	if warmupSelection != nil && warmupSelection.Account != nil {
+		decision.Layer = openAIAccountScheduleLayerWeeklyWarmup
+		decision.CandidateCount = candidateCount
+		decision.TopK = topK
+		decision.LoadSkew = loadSkew
+		decision.SelectedAccountID = warmupSelection.Account.ID
+		decision.SelectedAccountType = warmupSelection.Account.Type
+		return warmupSelection, decision, nil
 	}
 
 	if !req.StickyWeighted {
@@ -1327,6 +1348,9 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 		return nil, 0, 0, 0, err
 	}
 	if len(accounts) == 0 {
+		if req.weeklyWarmupOnly {
+			return nil, 0, 0, 0, errNoOpenAIWeeklyWarmupCandidates
+		}
 		return nil, 0, 0, 0, noAvailableOpenAISelectionError(req.RequestedModel, false, openAISelectionFilterStats{}.summary(""))
 	}
 
@@ -1382,7 +1406,17 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 		})
 	}
 	if len(filtered) == 0 {
+		if req.weeklyWarmupOnly {
+			return nil, 0, 0, 0, errNoOpenAIWeeklyWarmupCandidates
+		}
 		return nil, 0, 0, 0, noAvailableOpenAISelectionError(req.RequestedModel, false, filterStats.summary(""))
+	}
+	if req.weeklyWarmupOnly {
+		warmupAccounts, _ := partitionWeeklyWarmupAccounts(filtered, req.RequestedModel, time.Now())
+		if len(warmupAccounts) == 0 {
+			return nil, 0, 0, 0, errNoOpenAIWeeklyWarmupCandidates
+		}
+		filtered = warmupAccounts
 	}
 
 	loadMap := map[int64]*AccountLoadInfo{}

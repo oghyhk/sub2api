@@ -637,25 +637,32 @@ func (s *OpenAIGatewayService) selectAccountForModelWithExclusions(ctx context.C
 		return nil, fmt.Errorf("%w supporting model: %s (channel pricing restriction)", ErrNoAvailableAccounts, requestedModel)
 	}
 
-	// 1. 尝试粘性会话命中
-	// Try sticky session hit
-	if account := s.tryStickySessionHit(ctx, groupID, platform, sessionHash, requestedModel, excludedIDs, requireCompact, stickyAccountID, requiredCapability); account != nil {
-		return account, nil
-	}
-
-	// 2. 获取可调度的 OpenAI 账号
+	// 1. 获取可调度的 OpenAI 账号
 	// Get schedulable OpenAI accounts
 	accounts, err := s.listSchedulableAccounts(ctx, groupID, platform)
 	if err != nil {
+		if account := s.tryStickySessionHit(ctx, groupID, platform, sessionHash, requestedModel, excludedIDs, requireCompact, stickyAccountID, requiredCapability); account != nil {
+			return account, nil
+		}
 		return nil, fmt.Errorf("query accounts failed: %w", err)
 	}
 
-	// 3. 按优先级 + LRU 选择最佳账号
+	// 2. 按优先级 + LRU 选择最佳账号
 	// Select by priority + LRU
 	selected, compactBlocked := s.selectBestAccount(ctx, groupID, platform, accounts, requestedModel, excludedIDs, requireCompact, requiredCapability, preferLowUpstreamRate)
 
 	if selected == nil {
+		if account := s.tryStickySessionHit(ctx, groupID, platform, sessionHash, requestedModel, excludedIDs, requireCompact, stickyAccountID, requiredCapability); account != nil {
+			return account, nil
+		}
 		return nil, noAvailableOpenAISelectionError(requestedModel, compactBlocked, "")
+	}
+
+	// A known sub-1% weekly candidate temporarily overrides ordinary sticky routing.
+	if !isWeeklyWarmupAccount(selected, requestedModel, time.Now()) {
+		if account := s.tryStickySessionHit(ctx, groupID, platform, sessionHash, requestedModel, excludedIDs, requireCompact, stickyAccountID, requiredCapability); account != nil {
+			return account, nil
+		}
 	}
 
 	hydrated, err := s.hydrateSelectedAccount(ctx, selected)
@@ -788,6 +795,9 @@ func (s *OpenAIGatewayService) selectBestAccount(ctx context.Context, groupID *i
 	if len(eligible) == 0 {
 		return nil, compactBlocked
 	}
+	if warmup, _ := partitionWeeklyWarmupAccounts(eligible, requestedModel, time.Now()); len(warmup) > 0 {
+		eligible = warmup
+	}
 	rateOrder := openAILegacyUpstreamRateOrder{}
 	if preferLowUpstreamRate {
 		rateOrder = newOpenAILegacyUpstreamRateOrder(eligible, time.Now(), s.openAIOAuthSchedulingRateMultiplier(ctx))
@@ -896,6 +906,7 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 	if len(accounts) == 0 {
 		return nil, ErrNoAvailableAccounts
 	}
+	warmupCandidateIDs := s.openAIWeeklyWarmupCandidateIDs(ctx, groupID, platform, accounts, requestedModel, excludedIDs, requiredCapability)
 
 	isExcluded := func(accountID int64) bool {
 		if excludedIDs == nil {
@@ -906,7 +917,7 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 	}
 
 	// ============ Layer 1: Sticky session ============
-	if sessionHash != "" {
+	if sessionHash != "" && len(warmupCandidateIDs) == 0 {
 		accountID := stickyAccountID
 		if accountID > 0 && !isExcluded(accountID) {
 			account, err := s.getSchedulableAccount(ctx, accountID)
@@ -989,6 +1000,11 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 		}
 		if needsUpstreamCheck && s.isUpstreamModelRestrictedByChannel(ctx, *groupID, acc, requestedModel, requireCompact) {
 			continue
+		}
+		if len(warmupCandidateIDs) > 0 {
+			if _, warmup := warmupCandidateIDs[acc.ID]; !warmup {
+				continue
+			}
 		}
 		baseCandidateCount++
 		candidates = append(candidates, acc)
@@ -1187,6 +1203,39 @@ func (s *OpenAIGatewayService) selectAccountWithLoadAwareness(ctx context.Contex
 		return nil, ErrNoAvailableCompactAccounts
 	}
 	return nil, ErrNoAvailableAccounts
+}
+
+func (s *OpenAIGatewayService) openAIWeeklyWarmupCandidateIDs(
+	ctx context.Context,
+	groupID *int64,
+	platform string,
+	accounts []Account,
+	requestedModel string,
+	excludedIDs map[int64]struct{},
+	requiredCapability OpenAIEndpointCapability,
+) map[int64]struct{} {
+	needsUpstreamCheck := s.needsUpstreamChannelRestrictionCheck(ctx, groupID)
+	parentLookup := s.parentAccountLookup(ctx)
+	warmup := make(map[int64]struct{})
+	now := time.Now()
+	for i := range accounts {
+		account := &accounts[i]
+		if _, excluded := excludedIDs[account.ID]; excluded {
+			continue
+		}
+		if !isOpenAICompatibleAccountEligibleForRequest(ctx, account, platform, requestedModel, false, requiredCapability) ||
+			!parentHealthyForShadow(account, parentLookup) ||
+			s.isOpenAIAccountRequestRuntimeBlocked(account, requestedModel) {
+			continue
+		}
+		if needsUpstreamCheck && s.isUpstreamModelRestrictedByChannel(ctx, *groupID, account, requestedModel, false) {
+			continue
+		}
+		if isWeeklyWarmupAccount(account, requestedModel, now) {
+			warmup[account.ID] = struct{}{}
+		}
+	}
+	return warmup
 }
 
 func (s *OpenAIGatewayService) listSchedulableAccounts(ctx context.Context, groupID *int64, platform string) ([]Account, error) {

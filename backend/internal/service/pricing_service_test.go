@@ -182,6 +182,13 @@ func TestPricingService_BareGPT56AliasDeterministicallyUsesSol(t *testing.T) {
 func TestDefaultPricingIncludesOfficialGPT56Rates(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("..", "..", "resources", "model-pricing", "model_prices_and_context_window.json"))
 	require.NoError(t, err)
+	var catalog map[string]struct {
+		MaxInputTokens int `json:"max_input_tokens"`
+	}
+	require.NoError(t, json.Unmarshal(data, &catalog))
+	for _, model := range []string{"gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"} {
+		require.Equal(t, 358000, catalog[model].MaxInputTokens, model)
+	}
 
 	pricingSvc := &PricingService{}
 	pricingData, err := pricingSvc.parsePricingData(data)

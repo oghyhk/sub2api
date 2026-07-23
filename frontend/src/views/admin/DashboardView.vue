@@ -379,6 +379,7 @@
               :columns="recentRequestColumns"
               :loading="recentRequestsLoading"
               :show-upstream-endpoint="false"
+              :account-id-only="true"
               flat
             />
           </div>
@@ -492,7 +493,6 @@ const granularityOptions = computed(() => [
 
 const recentRequestColumns = computed<Column[]>(() => [
   { key: 'created_at', label: t('usage.time') },
-  { key: 'request_id', label: t('admin.dashboard.requestId') },
   { key: 'user', label: t('admin.usage.user') },
   { key: 'model', label: t('usage.model') },
   { key: 'account', label: t('admin.usage.account') },

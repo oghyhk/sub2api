@@ -185,4 +185,33 @@ describe('admin DashboardView', () => {
       sort_order: 'desc'
     })
   })
+
+  it('shows account IDs without request IDs in recent requests', async () => {
+    const wrapper = mount(DashboardView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          LoadingSpinner: true,
+          Icon: true,
+          DateRangePicker: true,
+          Select: true,
+          ModelDistributionChart: true,
+          TokenUsageTrend: true,
+          UsageTable: {
+            name: 'UsageTable',
+            props: ['columns', 'accountIdOnly'],
+            template: '<div data-testid="recent-requests-table" />'
+          },
+          Line: true
+        }
+      }
+    })
+
+    await flushPromises()
+
+    const table = wrapper.getComponent({ name: 'UsageTable' })
+    expect(table.props('accountIdOnly')).toBe(true)
+    expect(table.props('columns')).toEqual(expect.arrayContaining([{ key: 'account', label: 'admin.usage.account' }]))
+    expect(table.props('columns')).not.toEqual(expect.arrayContaining([{ key: 'request_id', label: expect.any(String) }]))
+  })
 })

@@ -58,7 +58,9 @@
         </template>
 
         <template #cell-account="{ row }">
-          <span class="text-sm text-gray-900 dark:text-white">{{ row.account?.name || '-' }}</span>
+          <span class="text-sm text-gray-900 dark:text-white">
+            {{ accountIdOnly ? (row.account_id != null ? `#${row.account_id}` : '-') : (row.account?.name || '-') }}
+          </span>
         </template>
 
         <template #cell-model="{ row }">
@@ -532,6 +534,7 @@ interface Props {
   defaultSortOrder?: 'asc' | 'desc'
   showAccountBilling?: boolean
   showUpstreamEndpoint?: boolean
+  accountIdOnly?: boolean
   /** 嵌入统一卡片内使用：去掉自身卡片外观 */
   flat?: boolean
 }
@@ -543,6 +546,7 @@ const props = withDefaults(defineProps<Props>(), {
   defaultSortOrder: 'asc',
   showAccountBilling: true,
   showUpstreamEndpoint: true,
+  accountIdOnly: false,
   flat: false
 })
 const emit = defineEmits<{
@@ -553,6 +557,7 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const showAccountBilling = props.showAccountBilling
 const showUpstreamEndpoint = props.showUpstreamEndpoint
+const accountIdOnly = props.accountIdOnly
 const ipGeoBatchLoading = ref(false)
 
 const showIpGeoToolbar = computed(() => props.columns.some((col) => col.key === 'ip_address'))

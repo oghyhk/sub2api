@@ -363,6 +363,41 @@ describe('admin UsageTable tooltip', () => {
   })
 })
 
+describe('admin UsageTable account display', () => {
+  const DataTableStubWithAccount = {
+    props: ['data'],
+    template: `
+      <div>
+        <div v-for="row in data" :key="row.request_id">
+          <slot name="cell-account" :row="row" />
+        </div>
+      </div>
+    `,
+  }
+
+  it('can render only the numeric account ID', () => {
+    const wrapper = mount(UsageTable, {
+      props: {
+        data: [{ request_id: 'req-account-id', account_id: 14, account: { id: 14, name: 'Full Account Name' } }],
+        loading: false,
+        columns: [{ key: 'account', label: 'Account' }],
+        accountIdOnly: true,
+      },
+      global: {
+        stubs: {
+          DataTable: DataTableStubWithAccount,
+          EmptyState: true,
+          Icon: true,
+          Teleport: true,
+        },
+      },
+    })
+
+    expect(wrapper.text()).toContain('#14')
+    expect(wrapper.text()).not.toContain('Full Account Name')
+  })
+})
+
 describe('admin UsageTable IP geolocation batch toolbar', () => {
   const DataTableStubWithIp = {
     props: ['data'],

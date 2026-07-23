@@ -67,20 +67,8 @@
             >
               {{ userInitial }}
             </span>
-            <span class="text-xs font-medium text-white">{{ t('home.dashboard') }}</span>
-            <svg
-              class="h-3 w-3 text-gray-400"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25"
-              />
-            </svg>
+            <span class="text-xs font-medium text-white dark:text-[#1d1d1f]">{{ t('home.dashboard') }}</span>
+            <Icon name="externalLink" size="xs" class="text-gray-400 dark:text-[#6e6e73]" />
           </router-link>
           <router-link
             v-else

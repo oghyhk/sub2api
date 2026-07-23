@@ -287,37 +287,47 @@
 
       <!-- Usage data from API -->
       <div v-else-if="hasAntigravityQuotaFromAPI" class="space-y-1">
-        <!-- Gemini 3 Pro -->
-        <UsageProgressBar
-          v-if="antigravity3ProUsageFromAPI !== null"
-          :label="t('admin.accounts.usageWindow.gemini3Pro')"
-          :utilization="antigravity3ProUsageFromAPI.utilization"
-          :resets-at="antigravity3ProUsageFromAPI.resetTime"
-          color="indigo"
-        />
-
-        <!-- Gemini 3 Flash -->
-        <UsageProgressBar
-          v-if="antigravity3FlashUsageFromAPI !== null"
-          :label="t('admin.accounts.usageWindow.gemini3Flash')"
-          :utilization="antigravity3FlashUsageFromAPI.utilization"
-          :resets-at="antigravity3FlashUsageFromAPI.resetTime"
-          color="emerald"
-        />
-
-        <!-- Gemini 3 Image -->
-        <UsageProgressBar
-          v-if="antigravity3ImageUsageFromAPI !== null"
-          :label="t('admin.accounts.usageWindow.gemini3Image')"
-          :utilization="antigravity3ImageUsageFromAPI.utilization"
-          :resets-at="antigravity3ImageUsageFromAPI.resetTime"
-          color="purple"
-        />
+        <template v-if="antigravitySharedGeminiUsageFromAPI">
+          <UsageProgressBar
+            :label="t('admin.accounts.usageWindow.geminiShared')"
+            :title="t('admin.accounts.usageWindow.geminiSharedHint')"
+            :utilization="antigravitySharedGeminiUsageFromAPI.utilization"
+            :resets-at="antigravitySharedGeminiUsageFromAPI.resetTime"
+            color="emerald"
+          />
+        </template>
+        <template v-else>
+          <UsageProgressBar
+            v-if="antigravity3ProUsageFromAPI !== null"
+            :label="t('admin.accounts.usageWindow.gemini3Pro')"
+            :title="t('admin.accounts.usageWindow.gemini3ProHint')"
+            :utilization="antigravity3ProUsageFromAPI.utilization"
+            :resets-at="antigravity3ProUsageFromAPI.resetTime"
+            color="indigo"
+          />
+          <UsageProgressBar
+            v-if="antigravity3FlashUsageFromAPI !== null"
+            :label="t('admin.accounts.usageWindow.gemini3Flash')"
+            :title="t('admin.accounts.usageWindow.gemini3FlashHint')"
+            :utilization="antigravity3FlashUsageFromAPI.utilization"
+            :resets-at="antigravity3FlashUsageFromAPI.resetTime"
+            color="emerald"
+          />
+          <UsageProgressBar
+            v-if="antigravity3ImageUsageFromAPI !== null"
+            :label="t('admin.accounts.usageWindow.gemini3Image')"
+            :title="t('admin.accounts.usageWindow.gemini3ImageHint')"
+            :utilization="antigravity3ImageUsageFromAPI.utilization"
+            :resets-at="antigravity3ImageUsageFromAPI.resetTime"
+            color="purple"
+          />
+        </template>
 
         <!-- Claude -->
         <UsageProgressBar
           v-if="antigravityClaudeUsageFromAPI !== null"
           :label="t('admin.accounts.usageWindow.claude')"
+          :title="t('admin.accounts.usageWindow.claudeHint')"
           :utilization="antigravityClaudeUsageFromAPI.utilization"
           :resets-at="antigravityClaudeUsageFromAPI.resetTime"
           color="amber"
@@ -775,16 +785,41 @@ const getAntigravityUsageFromAPI = (
 
 // Gemini 3 Pro from API
 const antigravity3ProUsageFromAPI = computed(() =>
-  getAntigravityUsageFromAPI(['gemini-3-pro-low', 'gemini-3-pro-high', 'gemini-3-pro-preview'])
+  getAntigravityUsageFromAPI([
+    'gemini-pro-agent',
+    'gemini-3.1-pro-low', 'gemini-3.1-pro-high', 'gemini-3.1-pro-preview',
+    'gemini-3-pro-low', 'gemini-3-pro-high', 'gemini-3-pro-preview'
+  ])
 )
 
 // Gemini 3 Flash from API
-const antigravity3FlashUsageFromAPI = computed(() => getAntigravityUsageFromAPI(['gemini-3-flash']))
+const antigravity3FlashUsageFromAPI = computed(() =>
+  getAntigravityUsageFromAPI([
+    'gemini-3-flash', 'gemini-3-flash-agent',
+    'gemini-3.5-flash-low', 'gemini-3.5-flash-extra-low',
+    'gemini-3.6-flash-tiered'
+  ])
+)
 
 // Gemini Image from API
 const antigravity3ImageUsageFromAPI = computed(() =>
   getAntigravityUsageFromAPI(['gemini-2.5-flash-image', 'gemini-3.1-flash-image', 'gemini-3-pro-image'])
 )
+
+const antigravitySharedGeminiUsageFromAPI = computed(() => {
+  const pools = [
+    antigravity3ProUsageFromAPI.value,
+    antigravity3FlashUsageFromAPI.value,
+    antigravity3ImageUsageFromAPI.value
+  ].filter((pool): pool is AntigravityUsageResult => pool !== null)
+
+  if (pools.length < 2) return null
+
+  const first = pools[0]
+  return pools.every(
+    (pool) => pool.utilization === first.utilization && pool.resetTime === first.resetTime
+  ) ? first : null
+})
 
 // Claude from API (all Claude model variants)
 const antigravityClaudeUsageFromAPI = computed(() =>

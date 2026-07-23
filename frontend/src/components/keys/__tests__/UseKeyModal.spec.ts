@@ -61,7 +61,7 @@ describe('UseKeyModal', () => {
     expect(windowsTab).toBeDefined()
     await windowsTab!.trigger('click')
     await nextTick()
-    expect(wrapper.text()).toContain('%userprofile%\\.grok/config.toml')
+    expect(wrapper.text()).toContain('%USERPROFILE%\\.grok\\config.toml')
 
     const opencodeTab = wrapper.findAll('button').find((button) =>
       button.text().includes('keys.useKeyModal.cliTabs.opencode')
@@ -108,6 +108,7 @@ describe('UseKeyModal', () => {
     )
     expect(claudeTab).toBeDefined()
     await claudeTab!.trigger('click')
+    await wrapper.get('[data-testid="setup-os-linux"]').trigger('click')
     await nextTick()
 
     let codeBlocks = wrapper.findAll('pre code').map((code) => code.text())
@@ -135,23 +136,11 @@ describe('UseKeyModal', () => {
     expect(wrapper.find('nav[aria-label="Client"]').classes()).toContain('min-w-max')
     expect(wrapper.find('nav[aria-label="Client"]').element.parentElement?.classList.contains('overflow-x-auto')).toBe(true)
 
-    const cmdTab = wrapper.findAll('button').find(
-      (button) => button.text().trim() === 'Windows CMD'
+    const windowsTab = wrapper.findAll('button').find(
+      (button) => button.text().trim() === 'Windows'
     )
-    expect(cmdTab).toBeDefined()
-    await cmdTab!.trigger('click')
-    await nextTick()
-
-    codeBlocks = wrapper.findAll('pre code').map((code) => code.text())
-    expect(codeBlocks.join('\n')).toContain('set ANTHROPIC_MODEL=grok-4.5')
-    expect(codeBlocks.join('\n')).toContain('set ANTHROPIC_DEFAULT_FABLE_MODEL=grok-4.5')
-    expect(codeBlocks.join('\n')).toContain('set CLAUDE_CODE_SUBAGENT_MODEL=grok-4.5')
-
-    const powershellTab = wrapper.findAll('button').find(
-      (button) => button.text().trim() === 'PowerShell'
-    )
-    expect(powershellTab).toBeDefined()
-    await powershellTab!.trigger('click')
+    expect(windowsTab).toBeDefined()
+    await windowsTab!.trigger('click')
     await nextTick()
 
     codeBlocks = wrapper.findAll('pre code').map((code) => code.text())
@@ -197,6 +186,7 @@ describe('UseKeyModal', () => {
     )
     expect(codexTab).toBeDefined()
     await codexTab!.trigger('click')
+    await wrapper.get('[data-testid="setup-os-linux"]').trigger('click')
     await nextTick()
 
     let codeBlocks = wrapper.findAll('pre code').map((code) => code.text())
@@ -254,9 +244,9 @@ describe('UseKeyModal', () => {
     const configToml = codeBlocks.find((content) => content.includes('model_provider = "OpenAI"'))
 
     expect(configToml).toBeDefined()
-    expect(configToml).toContain('model = "gpt-5.5"')
-    expect(configToml).toContain('review_model = "gpt-5.5"')
-    expect(configToml).not.toContain('model = "gpt-5.4"')
+    expect(configToml).toContain('model = "gpt-5.6-sol"')
+    expect(configToml).toContain('review_model = "gpt-5.6-sol"')
+    expect(configToml).not.toContain('gpt-5.5')
     expect(configToml).not.toContain('model_context_window')
     expect(configToml).not.toContain('model_auto_compact_token_limit')
     expect(configToml).toContain('requires_openai_auth = true')
@@ -269,6 +259,53 @@ describe('UseKeyModal', () => {
     expect(codeBlocks).toContain('{\n  "OPENAI_API_KEY": "sk-test"\n}')
     expect(wrapper.text()).toContain('auth.json')
     expect(wrapper.find('[data-testid="codex-api-key-restart-notice"]').exists()).toBe(false)
+  })
+
+  it('builds one OS-specific instruction for self-setup or a coding agent', async () => {
+    copyToClipboardMock.mockClear()
+    const wrapper = mount(UseKeyModal, {
+      props: {
+        show: true,
+        apiKey: 'sk-agent-handoff',
+        baseUrl: 'https://example.com/v1',
+        platform: 'openai'
+      },
+      global: {
+        stubs: {
+          BaseDialog: {
+            template: '<div><slot /><slot name="footer" /></div>'
+          },
+          Icon: {
+            template: '<span />'
+          }
+        }
+      }
+    })
+
+    await wrapper.get('[data-testid="setup-os-windows"]').trigger('click')
+    await nextTick()
+
+    let instruction = wrapper.get('[data-testid="setup-instruction-content"]').text()
+    expect(instruction).toContain('https://example.com/v1')
+    expect(instruction).toContain('sk-agent-handoff')
+    expect(instruction).toContain('gpt-5.6-sol, gpt-5.6-terra, gpt-5.6-luna')
+    expect(instruction).toContain('%USERPROFILE%\\.codex\\config.toml')
+    expect(instruction).not.toContain('gpt-5.5')
+
+    const opencodeTab = wrapper.findAll('button').find((button) =>
+      button.text().includes('keys.useKeyModal.cliTabs.opencode')
+    )
+    expect(opencodeTab).toBeDefined()
+    await opencodeTab!.trigger('click')
+    await nextTick()
+
+    instruction = wrapper.get('[data-testid="setup-instruction-content"]').text()
+    expect(instruction).toContain('%USERPROFILE%\\.config\\opencode\\opencode.jsonc')
+    expect(instruction).toContain('https://example.com/antigravity/v1beta')
+    expect(instruction).toContain('gemini-3.1-pro, gemini-3.6-flash')
+
+    await wrapper.get('[data-testid="copy-setup-instruction"]').trigger('click')
+    expect(copyToClipboardMock).toHaveBeenCalledWith(instruction, 'keys.copied')
   })
 
   it('renders API Key Mode authorization in OpenAI Codex config', async () => {
@@ -353,9 +390,9 @@ describe('UseKeyModal', () => {
     const configToml = codeBlocks.find((content) => content.includes('supports_websockets = true'))
 
     expect(configToml).toBeDefined()
-    expect(configToml).toContain('model = "gpt-5.5"')
-    expect(configToml).toContain('review_model = "gpt-5.5"')
-    expect(configToml).not.toContain('model = "gpt-5.4"')
+    expect(configToml).toContain('model = "gpt-5.6-sol"')
+    expect(configToml).toContain('review_model = "gpt-5.6-sol"')
+    expect(configToml).not.toContain('gpt-5.5')
     expect(configToml).not.toContain('model_context_window')
     expect(configToml).not.toContain('model_auto_compact_token_limit')
     expect(configToml).toContain('requires_openai_auth = true')
@@ -449,7 +486,7 @@ describe('UseKeyModal', () => {
     expect(wrapper.findAll('pre code').map((code) => code.text()).join('\n')).not.toContain('x-openai-actor-authorization')
   })
 
-  it('renders GPT-5.4 mini entry in OpenCode config', async () => {
+  it('renders the exact five-model product catalog in OpenCode config', async () => {
     const wrapper = mount(UseKeyModal, {
       props: {
         show: true,
@@ -477,13 +514,24 @@ describe('UseKeyModal', () => {
     await opencodeTab!.trigger('click')
     await nextTick()
 
-    const codeBlock = wrapper.find('pre code')
-    expect(codeBlock.exists()).toBe(true)
-    expect(codeBlock.text()).toContain('"name": "GPT-5.4 Mini"')
-    expect(codeBlock.text()).not.toContain('"name": "GPT-5.4 Nano"')
+    const parsed = JSON.parse(wrapper.find('pre code').text())
+    expect(Object.keys(parsed.provider.openai.models)).toEqual([
+      'gpt-5.6-sol',
+      'gpt-5.6-terra',
+      'gpt-5.6-luna'
+    ])
+    expect(Object.keys(parsed.provider['google-vps2'].models)).toEqual([
+      'gemini-3.1-pro',
+      'gemini-3.6-flash'
+    ])
+    expect(parsed.provider.openai.options.baseURL).toBe('https://example.com/v1')
+    expect(parsed.provider['google-vps2'].options.baseURL).toBe('https://example.com/antigravity/v1beta')
+    expect(parsed.model).toBe('openai/gpt-5.6-sol')
+    expect(parsed.small_model).toBe('openai/gpt-5.6-luna')
+    expect(JSON.stringify(parsed)).not.toContain('gpt-5.5')
   })
 
-  it('renders GPT-5.6 alias and max variants in OpenCode config', async () => {
+  it('renders max variants for each supported GPT model without an alias', async () => {
     const wrapper = mount(UseKeyModal, {
       props: {
         show: true,
@@ -512,12 +560,12 @@ describe('UseKeyModal', () => {
 
     const parsed = JSON.parse(wrapper.find('pre code').text())
     const models = parsed.provider.openai.models
-    for (const model of ['gpt-5.6', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna']) {
+    for (const model of ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna']) {
       expect(models[model]).toBeDefined()
       expect(models[model].variants).toHaveProperty('max')
       expect(models[model].variants).toHaveProperty('xhigh')
     }
-    expect(models['gpt-5.6'].name).toBe('GPT-5.6 (Sol)')
+    expect(models['gpt-5.6']).toBeUndefined()
   })
 
   it('renders Claude Fable 5 OpenCode config with adaptive thinking', async () => {

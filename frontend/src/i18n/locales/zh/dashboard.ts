@@ -138,10 +138,33 @@ export default {
     quota: '额度',
     lastUsedAt: '上次使用时间',
     lastUsedIP: '最近使用 IP',
-    useKey: '使用密钥',
+    useKey: '配置',
     useKeyModal: {
-      title: '使用 API 密钥',
-      description: '将以下环境变量添加到您的终端配置文件或直接在终端中运行。',
+      title: '配置编程工具',
+      description: '选择当前电脑和编程工具，我们会生成一份可由您本人或编程智能体直接使用的准确配置。',
+      osStep: '1. 选择当前电脑的操作系统',
+      clientStep: '2. 选择编程工具',
+      handoffTitle: '3. 复制完整配置指令',
+      handoffDescription: '您可以自行按指令配置，也可以将它粘贴给可信的编程智能体，让智能体在当前电脑上完成配置。',
+      setupInstruction: '配置指令',
+      copyInstruction: '复制配置指令',
+      copiedInstruction: '配置指令已复制',
+      secretWarning: '此指令包含您的 API 密钥。请仅粘贴给您信任的编程智能体，切勿提交到代码仓库。',
+      manualTitle: '配置详情',
+      promptIntro: '请在 {os} 上配置 {client}，使其使用我的 Sub2API 账号。',
+      promptRequirements: '连接信息',
+      promptApiBase: 'API 基础地址',
+      promptApiKey: 'API 密钥',
+      promptDefaultModel: '默认模型',
+      promptAvailableModels: '可用模型',
+      promptRules: '配置要求',
+      promptRuleBackup: '修改前备份已有配置；合并无关的现有设置，不要直接覆盖。',
+      promptRuleDirectories: '创建缺失的上级目录，并使用下面与操作系统对应的路径。',
+      promptRuleSecret: '妥善保护 API 密钥，不要写入日志或提交到代码仓库。',
+      promptConfiguration: '应用以下配置',
+      promptFile: '文件',
+      promptCommand: '运行',
+      promptFinish: '配置完成后，请完全重启编程工具，发送一条简短测试提示，并报告修改了哪些文件以及测试是否成功。',
       copy: '复制',
       copied: '已复制',
       note: '这些环境变量将在当前终端会话中生效。如需永久配置，请将其添加到 ~/.bashrc、~/.zshrc 或相应的配置文件中。',
@@ -150,7 +173,7 @@ export default {
       noGroupDescription:
         '此 API 密钥尚未分配分组，请先在密钥列表中点击分组列进行分配，然后才能查看使用配置。',
       openai: {
-        description: '将以下配置文件添加到 Codex CLI 配置目录中。',
+        description: '使用此 API 密钥配置 Codex，并接入支持的 GPT-5.6 模型。',
         authModeTitle: 'Codex 认证模式',
         authModeDescription: '兼容模式保留旧版 Codex 配置；API Key Mode 用于授权客户端图片执行器。',
         authModeLegacy: '兼容模式',
@@ -181,7 +204,7 @@ export default {
       gemini: {
         description:
           '将以下环境变量添加到您的终端配置文件或直接在终端中运行，以配置 Gemini CLI 访问。',
-        modelComment: '如果你有 Gemini 3 权限可以填：gemini-3-pro-preview',
+        modelComment: '默认快速模型；复杂任务可改用 gemini-3.1-pro',
         note: '这些环境变量将在当前终端会话中生效。如需永久配置，请将其添加到 ~/.bashrc、~/.zshrc 或相应的配置文件中。'
       },
       grok: {
@@ -199,7 +222,8 @@ export default {
       opencode: {
         title: 'OpenCode 配置示例',
         subtitle: 'opencode.json',
-        hint: '配置文件路径：~/.config/opencode/opencode.json（或 opencode.jsonc），不存在需手动创建。可使用默认 provider（openai/anthropic/google）或自定义 provider_id。API Key 支持直接配置或通过客户端 /connect 命令配置。示例仅供参考，模型与选项可按需调整。'
+        description: '使用此 API 密钥配置 OpenCode，并接入全部五个 GPT 和 Gemini 模型。',
+        hint: 'OpenCode 用户级配置。如文件已存在，请先备份并合并配置，不要覆盖无关的服务商。保存后请重启 OpenCode。'
       }
     },
     customKeyLabel: '自定义密钥',

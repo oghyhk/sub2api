@@ -56,7 +56,19 @@ export default {
     viewUsage: '查看使用记录',
     checkDetailedLogs: '查看详细的使用日志',
     redeemCode: '兑换码',
-    addBalanceWithCode: '使用兑换码充值'
+    addBalanceWithCode: '使用兑换码充值',
+    modelCatalog: {
+      title: '模型工作台',
+      subtitle: '探索已接入的 GPT-5.6 与 Gemini 3 系列模型及接口端点。',
+      noKeysNotice: '您当前尚未创建 API 密钥，立即创建密钥即可开始调用模型。',
+      createFirstKey: '创建 API 密钥',
+      manageKeys: '管理 API 密钥',
+      protocol: '协议',
+      endpoint: '端点',
+      copyEndpoint: '复制端点',
+      endpointCopied: '已复制端点',
+      purpose: '模型能力'
+    }
   },
 
   // Groups (shared)

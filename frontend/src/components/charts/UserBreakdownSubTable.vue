@@ -16,19 +16,28 @@
           <td class="max-w-[120px] truncate py-1 pl-6 text-gray-600 dark:text-gray-300" :title="user.email">
             {{ user.email || `User #${user.user_id}` }}
           </td>
-          <td class="py-1 text-right text-gray-500 dark:text-gray-400">
+          <td class="py-1 text-right tabular-nums text-gray-500 dark:text-gray-400">
             {{ user.requests.toLocaleString() }}
           </td>
-          <td class="py-1 text-right text-gray-500 dark:text-gray-400">
+          <td class="py-1 text-right tabular-nums text-gray-500 dark:text-gray-400">
+            {{ formatTokens(user.input_tokens) }}
+          </td>
+          <td class="py-1 text-right tabular-nums text-gray-500 dark:text-gray-400">
+            {{ formatTokens(user.cache_tokens) }}
+          </td>
+          <td class="py-1 text-right tabular-nums text-gray-500 dark:text-gray-400">
+            {{ formatTokens(user.output_tokens) }}
+          </td>
+          <td class="py-1 text-right tabular-nums font-medium text-gray-900 dark:text-white">
             {{ formatTokens(user.total_tokens) }}
           </td>
-          <td class="py-1 text-right text-green-600 dark:text-green-400">
+          <td class="py-1 text-right tabular-nums text-green-600 dark:text-green-400">
             ${{ formatCost(user.actual_cost) }}
           </td>
-          <td v-if="showAccountCost" class="py-1 text-right text-orange-500 dark:text-orange-400">
+          <td v-if="showAccountCost" class="py-1 text-right tabular-nums text-orange-500 dark:text-orange-400">
             ${{ formatCost(user.account_cost) }}
           </td>
-          <td class="py-1 pr-1 text-right text-gray-400 dark:text-gray-500">
+          <td class="py-1 pr-1 text-right tabular-nums text-gray-400 dark:text-gray-500">
             ${{ formatCost(user.cost) }}
           </td>
         </tr>

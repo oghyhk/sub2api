@@ -114,6 +114,49 @@ export default {
     }
   },
 
+  // Public product onboarding
+  productOnboarding: {
+    hero: {
+      title: '{count} 个模型，一个 API',
+      subtitle: '通过统一网关接入 GPT-5.6 和 Gemini 3 系列，无需单独订阅，无需繁琐配置'
+    },
+    models: {
+      title: '选择适合你的模型',
+      subtitle: '每个模型各有优势，为每项任务选择最合适的工具',
+      gptLabel: 'GPT',
+      geminiLabel: 'Gemini',
+      gptSol: 'GPT-5.6 Sol',
+      gptSolDesc: '旗舰推理模型，具备深度思维链能力，适用于复杂问题求解',
+      gptTerra: 'GPT-5.6 Terra',
+      gptTerraDesc: '全能型通用模型，为日常生产负载进行优化',
+      gptLuna: 'GPT-5.6 Luna',
+      gptLunaDesc: '快速轻量模型，适用于高吞吐和低延迟场景',
+      geminiPro: 'Gemini 3.1 Pro',
+      geminiProDesc: 'Google 最强多模态模型，原生工具调用，支持 100 万上下文',
+      geminiFlash: 'Gemini 3.6 Flash',
+      geminiFlashDesc: '超高速推理，适用于实时流式和高并发任务'
+    },
+    steps: {
+      title: '三步开始使用',
+      step1: {
+        title: '创建账号',
+        desc: '使用邮箱或 GitHub 注册，无需信用卡即可开始'
+      },
+      step2: {
+        title: '生成 API 密钥',
+        desc: '一个密钥可调用全部可用模型，支持按密钥设置用量限制'
+      },
+      step3: {
+        title: '构建与扩展',
+        desc: '连接 OpenAI 兼容或 Google Gemini 客户端，实时监控用量和消费'
+      }
+    },
+    cta: {
+      title: '准备好开始构建了吗？',
+      button: '免费开始'
+    }
+  },
+
   // Key Usage Query Page
   keyUsage: {
     title: 'API Key 用量查询',

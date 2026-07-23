@@ -114,6 +114,49 @@ export default {
     }
   },
 
+  // Public product onboarding
+  productOnboarding: {
+    hero: {
+      title: '{count} Models. One API.',
+      subtitle: 'Access GPT-5.6 and Gemini 3 series through a single unified gateway. No subscriptions. No hassle.'
+    },
+    models: {
+      title: 'Choose Your Model',
+      subtitle: 'Each model brings unique strengths. Pick the right tool for every task.',
+      gptLabel: 'GPT',
+      geminiLabel: 'Gemini',
+      gptSol: 'GPT-5.6 Sol',
+      gptSolDesc: 'Flagship reasoning model with deep chain-of-thought for complex problem-solving.',
+      gptTerra: 'GPT-5.6 Terra',
+      gptTerraDesc: 'Balanced general-purpose model optimized for everyday production workloads.',
+      gptLuna: 'GPT-5.6 Luna',
+      gptLunaDesc: 'Fast, lightweight model for high-throughput and latency-sensitive applications.',
+      geminiPro: 'Gemini 3.1 Pro',
+      geminiProDesc: 'Google\'s most capable multimodal model with native tool use and 1M context.',
+      geminiFlash: 'Gemini 3.6 Flash',
+      geminiFlashDesc: 'Ultra-fast inference for real-time streaming and high-volume tasks.'
+    },
+    steps: {
+      title: 'Get Started in 3 Steps',
+      step1: {
+        title: 'Create Your Account',
+        desc: 'Sign up with your email or GitHub. No credit card required to start.'
+      },
+      step2: {
+        title: 'Generate an API Key',
+        desc: 'One key works across every available model. Set usage limits per key from day one.'
+      },
+      step3: {
+        title: 'Build and Scale',
+        desc: 'Connect an OpenAI-compatible or Google Gemini client. Monitor usage and spend in real time.'
+      }
+    },
+    cta: {
+      title: 'Ready to build?',
+      button: 'Start for Free'
+    }
+  },
+
   // Key Usage Query Page
   keyUsage: {
     title: 'API Key Usage',

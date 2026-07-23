@@ -101,21 +101,24 @@
     </div>
     <div
       v-else-if="activeView === 'model_distribution' && displayModelStats.length > 0 && chartData"
-      class="flex flex-col items-center gap-4 sm:flex-row sm:gap-6"
+      class="grid w-full gap-4 lg:grid-cols-[12rem_minmax(0,1fr)] lg:items-start"
     >
-      <div class="h-48 w-48 shrink-0">
+      <div class="mx-auto h-48 w-48 shrink-0">
         <Doughnut :data="chartData" :options="doughnutOptions" />
       </div>
-      <div class="max-h-48 w-full min-w-0 flex-1 overflow-auto">
-        <table class="w-full text-xs">
-          <thead>
+      <div class="max-h-80 w-full min-w-0 overflow-auto rounded-lg border border-gray-200 dark:border-dark-700">
+        <table class="min-w-[900px] w-full text-xs">
+          <thead class="sticky top-0 z-10 bg-white dark:bg-dark-900">
             <tr class="text-gray-500 dark:text-gray-400">
-              <th class="pb-2 text-left">{{ t('admin.dashboard.model') }}</th>
-              <th class="pb-2 text-right">{{ t('admin.dashboard.requests') }}</th>
-              <th class="pb-2 text-right">{{ t('admin.dashboard.tokens') }}</th>
-              <th class="pb-2 text-right">{{ t('admin.dashboard.actual') }}</th>
-              <th v-if="showAccountCost" class="pb-2 text-right">{{ t('admin.dashboard.accountCost') }}</th>
-              <th class="pb-2 text-right">{{ t('admin.dashboard.standard') }}</th>
+              <th scope="col" class="px-2 py-2 text-left whitespace-nowrap">{{ t('admin.dashboard.model') }}</th>
+              <th scope="col" class="px-2 py-2 text-right whitespace-nowrap">{{ t('admin.dashboard.requests') }}</th>
+              <th scope="col" class="px-2 py-2 text-right whitespace-nowrap">{{ t('admin.dashboard.input') }}</th>
+              <th scope="col" class="px-2 py-2 text-right whitespace-nowrap">{{ t('admin.dashboard.cacheRead') }}</th>
+              <th scope="col" class="px-2 py-2 text-right whitespace-nowrap">{{ t('admin.dashboard.output') }}</th>
+              <th scope="col" class="px-2 py-2 text-right whitespace-nowrap">{{ t('admin.dashboard.tokens') }}</th>
+              <th scope="col" class="px-2 py-2 text-right whitespace-nowrap">{{ t('admin.dashboard.actual') }}</th>
+              <th v-if="showAccountCost" scope="col" class="px-2 py-2 text-right whitespace-nowrap">{{ t('admin.dashboard.accountCost') }}</th>
+              <th scope="col" class="px-2 py-2 text-right whitespace-nowrap">{{ t('admin.dashboard.standard') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -123,32 +126,49 @@
               <tr
                 class="border-t border-gray-100 transition-colors dark:border-dark-700"
                 :class="enableBreakdown ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-700/40' : ''"
+                :tabindex="enableBreakdown ? 0 : undefined"
+                :aria-expanded="enableBreakdown ? expandedKey === `model-${model.model}` : undefined"
                 @click="enableBreakdown && toggleBreakdown('model', model.model)"
+                @keydown.enter.prevent="enableBreakdown && toggleBreakdown('model', model.model)"
+                @keydown.space.prevent="enableBreakdown && toggleBreakdown('model', model.model)"
               >
                 <td
-                  class="max-w-[100px] truncate py-1.5 font-medium"
+                  class="min-w-[160px] px-2 py-2 font-medium"
                   :class="enableBreakdown ? 'text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300' : 'text-gray-900 dark:text-white'"
                   :title="model.model"
                 >
-                  <span class="inline-flex items-center gap-1">
-                    <svg v-if="enableBreakdown && expandedKey === `model-${model.model}`" class="h-3 w-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                    <svg v-else-if="enableBreakdown" class="h-3 w-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-                    {{ model.model }}
+                  <span class="flex items-center gap-1">
+                    <Icon v-if="enableBreakdown" :name="expandedKey === `model-${model.model}` ? 'chevronDown' : 'chevronRight'" size="xs" class="shrink-0" />
+                    <span class="truncate">{{ model.model }}</span>
+                  </span>
+                  <span class="mt-1.5 flex h-1.5 max-w-32 overflow-hidden rounded-full bg-gray-100 dark:bg-dark-700" aria-hidden="true">
+                    <span class="bg-gray-500" :style="{ width: tokenPartWidth(model, 'input_tokens') }"></span>
+                    <span class="bg-emerald-500" :style="{ width: tokenPartWidth(model, 'cache_read_tokens') }"></span>
+                    <span class="bg-blue-500" :style="{ width: tokenPartWidth(model, 'output_tokens') }"></span>
                   </span>
                 </td>
-                <td class="py-1.5 text-right text-gray-600 dark:text-gray-400">
+                <td class="px-2 py-2 text-right tabular-nums text-gray-600 dark:text-gray-400">
                   {{ formatNumber(model.requests) }}
                 </td>
-                <td class="py-1.5 text-right text-gray-600 dark:text-gray-400">
+                <td class="px-2 py-2 text-right tabular-nums text-gray-600 dark:text-gray-400">
+                  {{ formatTokens(model.input_tokens) }}
+                </td>
+                <td class="px-2 py-2 text-right tabular-nums text-emerald-600 dark:text-emerald-400">
+                  {{ formatTokens(model.cache_read_tokens) }}
+                </td>
+                <td class="px-2 py-2 text-right tabular-nums text-blue-600 dark:text-blue-400">
+                  {{ formatTokens(model.output_tokens) }}
+                </td>
+                <td class="px-2 py-2 text-right tabular-nums font-medium text-gray-900 dark:text-white">
                   {{ formatTokens(model.total_tokens) }}
                 </td>
-                <td class="py-1.5 text-right text-green-600 dark:text-green-400">
+                <td class="px-2 py-2 text-right tabular-nums text-green-600 dark:text-green-400">
                   ${{ formatCost(model.actual_cost) }}
                 </td>
-                <td v-if="showAccountCost" class="py-1.5 text-right text-orange-500 dark:text-orange-400">
+                <td v-if="showAccountCost" class="px-2 py-2 text-right tabular-nums text-orange-500 dark:text-orange-400">
                   ${{ formatCost(model.account_cost) }}
                 </td>
-                <td class="py-1.5 text-right text-gray-400 dark:text-gray-500">
+                <td class="px-2 py-2 text-right tabular-nums text-gray-400 dark:text-gray-500">
                   ${{ formatCost(model.cost) }}
                 </td>
               </tr>
@@ -248,6 +268,7 @@ import { useI18n } from 'vue-i18n'
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js'
 import { Doughnut } from 'vue-chartjs'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import Icon from '@/components/icons/Icon.vue'
 import UserBreakdownSubTable from './UserBreakdownSubTable.vue'
 import type { ModelStat, UserSpendingRankingItem, UserBreakdownItem } from '@/types'
 import { getUserBreakdown } from '@/api/admin/dashboard'
@@ -336,7 +357,7 @@ const emit = defineEmits<{
 
 const enableRankingView = computed(() => props.enableRankingView)
 const showAccountCost = computed(() => props.showAccountCost)
-const distributionColspan = computed(() => showAccountCost.value ? 6 : 5)
+const distributionColspan = computed(() => showAccountCost.value ? 9 : 8)
 const activeView = ref<'model_distribution' | 'spending_ranking'>('model_distribution')
 
 const chartColors = [
@@ -488,6 +509,17 @@ const formatTokens = (value: number): string => {
     return `${(value / 1_000).toFixed(2)}K`
   }
   return value.toLocaleString()
+}
+
+const tokenPartWidth = (
+  model: ModelStat,
+  key: 'input_tokens' | 'cache_read_tokens' | 'output_tokens'
+): string => {
+  const total = toFiniteNumber(model.input_tokens)
+    + toFiniteNumber(model.cache_read_tokens)
+    + toFiniteNumber(model.output_tokens)
+  if (total <= 0) return '0%'
+  return `${(toFiniteNumber(model[key]) / total) * 100}%`
 }
 
 const formatNumber = (value: number): string => {

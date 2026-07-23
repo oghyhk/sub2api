@@ -45,6 +45,7 @@ export default {
       requests: 'Requests',
       tokens: 'Tokens',
       cache: 'Cache',
+      cacheRead: 'Cache Read',
       actual: 'Actual',
       standard: 'Standard',
       accountCost: 'Cost',

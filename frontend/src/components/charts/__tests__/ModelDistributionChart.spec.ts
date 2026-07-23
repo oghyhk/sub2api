@@ -19,6 +19,9 @@ const messages: Record<string, string> = {
   'admin.dashboard.actual': 'Actual',
   'admin.dashboard.accountCost': 'Account Cost',
   'admin.dashboard.standard': 'Standard',
+  'admin.dashboard.input': 'Input',
+  'admin.dashboard.cacheRead': 'Cache Read',
+  'admin.dashboard.output': 'Output',
   'admin.dashboard.metricTokens': 'By Tokens',
   'admin.dashboard.metricActualCost': 'By Actual Cost',
   'admin.dashboard.noDataAvailable': 'No data available',
@@ -50,7 +53,7 @@ describe('ModelDistributionChart', () => {
       input_tokens: 100,
       output_tokens: 50,
       cache_creation_tokens: 0,
-      cache_read_tokens: 0,
+      cache_read_tokens: 25,
       total_tokens: 1000,
       cost: 1.5,
       actual_cost: 0.2,
@@ -61,7 +64,7 @@ describe('ModelDistributionChart', () => {
       input_tokens: 40,
       output_tokens: 20,
       cache_creation_tokens: 0,
-      cache_read_tokens: 0,
+      cache_read_tokens: 10,
       total_tokens: 500,
       cost: 0.5,
       actual_cost: 1.4,
@@ -87,6 +90,13 @@ describe('ModelDistributionChart', () => {
     const rows = wrapper.findAll('tbody tr')
     expect(rows[0].text()).toContain('model-a')
     expect(rows[1].text()).toContain('model-b')
+    expect(wrapper.find('thead').text()).toContain('Input')
+    expect(wrapper.find('thead').text()).toContain('Cache Read')
+    expect(wrapper.find('thead').text()).toContain('Output')
+    const firstModelCells = rows[0].findAll('td')
+    expect(firstModelCells[2].text()).toBe('100')
+    expect(firstModelCells[3].text()).toBe('25')
+    expect(firstModelCells[4].text()).toBe('50')
 
     const options = (wrapper.vm as any).$?.setupState.doughnutOptions
     const label = options.plugins.tooltip.callbacks.label({
@@ -141,8 +151,8 @@ describe('ModelDistributionChart', () => {
     })
 
     expect(wrapper.text()).not.toContain('Account Cost')
-    expect(wrapper.findAll('thead th')).toHaveLength(5)
-    expect(wrapper.findAll('tbody tr')[0].findAll('td')).toHaveLength(5)
+    expect(wrapper.findAll('thead th')).toHaveLength(8)
+    expect(wrapper.findAll('tbody tr')[0].findAll('td')).toHaveLength(8)
   })
 
   it('renders Others in the spending ranking table and uses a dedicated chart color', async () => {

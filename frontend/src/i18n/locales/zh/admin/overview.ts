@@ -49,6 +49,7 @@ export default {
       requests: '请求',
       tokens: 'Token',
       cache: '缓存',
+      cacheRead: '缓存读取',
       recentUsage: '最近使用',
       viewModelDistribution: '模型分布',
       viewSpendingRanking: '用户消费榜',

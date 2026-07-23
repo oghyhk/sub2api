@@ -56,7 +56,19 @@ export default {
     viewUsage: 'View Usage',
     checkDetailedLogs: 'Check detailed usage logs',
     redeemCode: 'Redeem Code',
-    addBalanceWithCode: 'Add balance with a code'
+    addBalanceWithCode: 'Add balance with a code',
+    modelCatalog: {
+      title: 'Model Catalog & Workspace',
+      subtitle: 'Explore available GPT-5.6 and Gemini 3 models and their endpoints.',
+      noKeysNotice: 'You do not have any active API keys yet. Create a key to start building.',
+      createFirstKey: 'Create API Key',
+      manageKeys: 'Manage API Keys',
+      protocol: 'Protocol',
+      endpoint: 'Endpoint',
+      copyEndpoint: 'Copy Endpoint',
+      endpointCopied: 'Endpoint copied',
+      purpose: 'Model Capabilities'
+    }
   },
 
   // Groups (shared)

@@ -658,7 +658,7 @@ func (s *OpenAIGatewayService) selectAccountForModelWithExclusions(ctx context.C
 		return nil, noAvailableOpenAISelectionError(requestedModel, compactBlocked, "")
 	}
 
-	// A known sub-1% weekly candidate temporarily overrides ordinary sticky routing.
+	// A known zero-percent weekly candidate temporarily overrides ordinary sticky routing.
 	if !isWeeklyWarmupAccount(selected, requestedModel, time.Now()) {
 		if account := s.tryStickySessionHit(ctx, groupID, platform, sessionHash, requestedModel, excludedIDs, requireCompact, stickyAccountID, requiredCapability); account != nil {
 			return account, nil

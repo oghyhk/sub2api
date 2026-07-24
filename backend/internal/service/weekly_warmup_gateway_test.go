@@ -52,8 +52,8 @@ func TestAntigravityWeeklyWarmupOverridesThenRestoresSticky(t *testing.T) {
 		selection.ReleaseFunc()
 	})
 
-	t.Run("one percent restores sticky", func(t *testing.T) {
-		svc, _ := newService(1)
+	t.Run("fractional positive usage restores sticky", func(t *testing.T) {
+		svc, _ := newService(0.01)
 		selection, err := svc.SelectAccountWithLoadAwareness(ctx, nil, "weekly-session", "", nil, "", 0)
 		require.NoError(t, err)
 		require.Equal(t, int64(75001), selection.Account.ID)

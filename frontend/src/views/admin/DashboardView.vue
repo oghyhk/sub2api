@@ -216,54 +216,6 @@
           </div>
         </div>
 
-        <!-- Quick Actions -->
-        <div class="card p-4">
-          <div class="mb-3 flex items-center justify-between">
-            <h2 class="text-sm font-semibold text-gray-900 dark:text-white">
-              {{ t('admin.dashboard.quickActions') }}
-            </h2>
-          </div>
-          <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <button
-              v-if="canUseBatchImage"
-              type="button"
-              class="group flex items-center gap-3 rounded-lg bg-gray-50 p-3 text-left transition-colors hover:bg-sky-50 dark:bg-dark-800/50 dark:hover:bg-sky-900/20"
-              @click="router.push('/batch-image')"
-            >
-              <span class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400">
-                <Icon name="sparkles" size="md" :stroke-width="2" />
-              </span>
-              <span class="min-w-0 flex-1">
-                <span class="block text-sm font-medium text-gray-900 dark:text-white">
-                  {{ t('admin.dashboard.batchImage') }}
-                </span>
-                <span class="block text-xs text-gray-500 dark:text-gray-400">
-                  {{ t('admin.dashboard.batchImageDesc') }}
-                </span>
-              </span>
-              <Icon name="chevronRight" size="sm" class="text-gray-400 group-hover:text-sky-500" />
-            </button>
-            <button
-              type="button"
-              class="group flex items-center gap-3 rounded-lg bg-gray-50 p-3 text-left transition-colors hover:bg-emerald-50 dark:bg-dark-800/50 dark:hover:bg-emerald-900/20"
-              @click="router.push('/admin/groups')"
-            >
-              <span class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
-                <Icon name="grid" size="md" :stroke-width="2" />
-              </span>
-              <span class="min-w-0 flex-1">
-                <span class="block text-sm font-medium text-gray-900 dark:text-white">
-                  {{ t('admin.dashboard.groupPricing') }}
-                </span>
-                <span class="block text-xs text-gray-500 dark:text-gray-400">
-                  {{ t('admin.dashboard.groupPricingDesc') }}
-                </span>
-              </span>
-              <Icon name="chevronRight" size="sm" class="text-gray-400 group-hover:text-emerald-500" />
-            </button>
-          </div>
-        </div>
-
         <!-- Charts Section -->
         <div class="space-y-6">
           <!-- Date Range Filter -->
@@ -279,7 +231,11 @@
                   @change="onDateRangeChange"
                 />
               </div>
-              <button @click="loadDashboardStats" :disabled="chartsLoading" class="btn btn-secondary">
+              <button
+                @click="loadDashboardStats"
+                :disabled="chartsLoading || modelStatsLoading"
+                class="btn btn-secondary"
+              >
                 {{ t('common.refresh') }}
               </button>
               <div class="ml-auto flex items-center gap-2">
@@ -306,11 +262,11 @@
               :ranking-total-actual-cost="rankingTotalActualCost"
               :ranking-total-requests="rankingTotalRequests"
               :ranking-total-tokens="rankingTotalTokens"
-              :loading="chartsLoading"
+              :loading="modelStatsLoading"
               :ranking-loading="rankingLoading"
               :ranking-error="rankingError"
-              :start-date="startDate"
-              :end-date="endDate"
+              :start-date="allTimeModelStartDate"
+              :end-date="allTimeModelEndDate"
               @ranking-click="goToUserUsage"
             />
             <TokenUsageTrend :trend-data="trendData" :loading="chartsLoading" />
@@ -414,7 +370,6 @@ import Select from '@/components/common/Select.vue'
 import ModelDistributionChart from '@/components/charts/ModelDistributionChart.vue'
 import TokenUsageTrend from '@/components/charts/TokenUsageTrend.vue'
 import UsageTable from '@/components/admin/usage/UsageTable.vue'
-import { useBatchImageAccess } from '@/composables/useBatchImageAccess'
 
 import {
   Chart as ChartJS,
@@ -441,10 +396,10 @@ ChartJS.register(
 
 const appStore = useAppStore()
 const router = useRouter()
-const { canUseBatchImage, refreshBatchImageAccess } = useBatchImageAccess()
 const stats = ref<DashboardStats | null>(null)
 const loading = ref(false)
 const chartsLoading = ref(false)
+const modelStatsLoading = ref(false)
 const userTrendLoading = ref(false)
 const rankingLoading = ref(false)
 const rankingError = ref(false)
@@ -484,6 +439,8 @@ const granularity = ref<'day' | 'hour'>('hour')
 const defaultRange = getLast24HoursRangeDates()
 const startDate = ref(defaultRange.start)
 const endDate = ref(defaultRange.end)
+const allTimeModelStartDate = '1970-01-01'
+const allTimeModelEndDate = ref(formatLocalDate(new Date()))
 
 // Granularity options for Select component
 const granularityOptions = computed(() => [
@@ -722,7 +679,7 @@ const loadDashboardSnapshot = async (includeStats: boolean) => {
       granularity: granularity.value,
       include_stats: includeStats,
       include_trend: true,
-      include_model_stats: true,
+      include_model_stats: false,
       include_group_stats: false,
       include_users_trend: false
     })
@@ -731,7 +688,6 @@ const loadDashboardSnapshot = async (includeStats: boolean) => {
       stats.value = response.stats
     }
     trendData.value = response.trend || []
-    modelStats.value = response.models || []
   } catch (error) {
     if (currentSeq !== chartLoadSeq) return
     appStore.showError(t('admin.dashboard.failedToLoad'))
@@ -741,6 +697,25 @@ const loadDashboardSnapshot = async (includeStats: boolean) => {
       loading.value = false
       chartsLoading.value = false
     }
+  }
+}
+
+const loadAllTimeModelStats = async () => {
+  modelStatsLoading.value = true
+  allTimeModelEndDate.value = formatLocalDate(new Date())
+  try {
+    const response = await adminAPI.dashboard.getModelStats({
+      start_date: allTimeModelStartDate,
+      end_date: allTimeModelEndDate.value,
+      model_source: 'requested'
+    })
+    modelStats.value = response.models || []
+  } catch (error) {
+    console.error('Error loading all-time model distribution:', error)
+    modelStats.value = []
+    appStore.showError(t('admin.dashboard.failedToLoad'))
+  } finally {
+    modelStatsLoading.value = false
   }
 }
 
@@ -821,6 +796,7 @@ const loadRecentRequests = async () => {
 const loadDashboardStats = async () => {
   await Promise.all([
     loadDashboardSnapshot(true),
+    loadAllTimeModelStats(),
     loadUsersTrend(),
     loadUserSpendingRanking(),
     loadRecentRequests()
@@ -836,7 +812,6 @@ const loadChartData = async () => {
 }
 
 onMounted(() => {
-  void refreshBatchImageAccess()
   loadDashboardStats()
 })
 </script>

@@ -5,8 +5,9 @@ import { createPinia, setActivePinia } from 'pinia'
 import type { DashboardStats } from '@/types'
 import DashboardView from '../DashboardView.vue'
 
-const { getSnapshotV2, getUserUsageTrend, getUserSpendingRanking, listUsage } = vi.hoisted(() => ({
+const { getSnapshotV2, getModelStats, getUserUsageTrend, getUserSpendingRanking, listUsage } = vi.hoisted(() => ({
   getSnapshotV2: vi.fn(),
+  getModelStats: vi.fn(),
   getUserUsageTrend: vi.fn(),
   getUserSpendingRanking: vi.fn(),
   listUsage: vi.fn()
@@ -16,6 +17,7 @@ vi.mock('@/api/admin', () => ({
   adminAPI: {
     dashboard: {
       getSnapshotV2,
+      getModelStats,
       getUserUsageTrend,
       getUserSpendingRanking
     },
@@ -95,6 +97,7 @@ describe('admin DashboardView', () => {
     setActivePinia(createPinia())
 
     getSnapshotV2.mockReset()
+    getModelStats.mockReset()
     getUserUsageTrend.mockReset()
     getUserSpendingRanking.mockReset()
     listUsage.mockReset()
@@ -109,6 +112,11 @@ describe('admin DashboardView', () => {
       start_date: '',
       end_date: '',
       granularity: 'hour'
+    })
+    getModelStats.mockResolvedValue({
+      models: [],
+      start_date: '1970-01-01',
+      end_date: ''
     })
     getUserSpendingRanking.mockResolvedValue({
       ranking: [],
@@ -153,8 +161,58 @@ describe('admin DashboardView', () => {
     expect(getSnapshotV2).toHaveBeenCalledWith(expect.objectContaining({
       start_date: formatLocalDate(yesterday),
       end_date: formatLocalDate(now),
-      granularity: 'hour'
+      granularity: 'hour',
+      include_model_stats: false
     }))
+  })
+
+  it('loads model distribution over the full retained history', async () => {
+    mount(DashboardView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          LoadingSpinner: true,
+          Icon: true,
+          DateRangePicker: true,
+          Select: true,
+          ModelDistributionChart: true,
+          TokenUsageTrend: true,
+          UsageTable: true,
+          Line: true
+        }
+      }
+    })
+
+    await flushPromises()
+
+    expect(getModelStats).toHaveBeenCalledTimes(1)
+    expect(getModelStats).toHaveBeenCalledWith({
+      start_date: '1970-01-01',
+      end_date: formatLocalDate(new Date()),
+      model_source: 'requested'
+    })
+  })
+
+  it('does not render the Quick Actions section', async () => {
+    const wrapper = mount(DashboardView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          LoadingSpinner: true,
+          Icon: true,
+          DateRangePicker: true,
+          Select: true,
+          ModelDistributionChart: true,
+          TokenUsageTrend: true,
+          UsageTable: true,
+          Line: true
+        }
+      }
+    })
+
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('admin.dashboard.quickActions')
   })
 
   it('loads the latest persisted request logs', async () => {

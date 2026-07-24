@@ -376,6 +376,7 @@
                 @click="openUseKeyModal(row)"
                 :aria-label="t('keys.useKey')"
                 :title="t('keys.useKey')"
+                data-tour="key-setup-btn"
                 class="flex min-h-11 min-w-11 flex-col items-center justify-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-green-50 hover:text-green-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2 dark:hover:bg-green-900/20 dark:hover:text-green-400 dark:focus-visible:ring-offset-dark-900"
               >
                 <Icon name="terminal" size="sm" />

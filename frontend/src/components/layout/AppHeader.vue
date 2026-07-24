@@ -21,14 +21,49 @@
         </div>
       </div>
 
-      <!-- Right: Announcements + Docs + Language + Subscriptions + Balance + User Dropdown -->
+      <!-- Right: Announcements + User Help + Language + Subscriptions + Balance + User Dropdown -->
       <div class="flex min-w-0 items-center gap-1 sm:gap-3">
         <!-- Announcement Bell -->
         <AnnouncementBell v-if="user" />
 
-        <!-- Docs Link -->
+        <!-- Normal-user help actions -->
+        <div v-if="isNormalUser" class="flex items-center gap-0.5 sm:gap-1">
+          <button
+            type="button"
+            class="header-action"
+            :aria-label="t('nav.guide')"
+            :title="t('nav.guide')"
+            data-testid="user-guide-action"
+            @click="handleReplayGuide"
+          >
+            <Icon name="questionCircle" size="sm" />
+            <span class="hidden xl:inline">{{ t('nav.guide') }}</span>
+          </button>
+          <router-link
+            to="/docs"
+            class="header-action"
+            :aria-label="t('nav.docs')"
+            :title="t('nav.docs')"
+            data-testid="user-docs-action"
+          >
+            <Icon name="book" size="sm" />
+            <span class="hidden xl:inline">{{ t('nav.docs') }}</span>
+          </router-link>
+          <router-link
+            to="/pricing"
+            class="header-action"
+            :aria-label="t('nav.pricing')"
+            :title="t('nav.pricing')"
+            data-testid="user-pricing-action"
+          >
+            <Icon name="dollar" size="sm" />
+            <span class="hidden xl:inline">{{ t('nav.pricing') }}</span>
+          </router-link>
+        </div>
+
+        <!-- Configured external docs link (admin only; users get the built-in guide) -->
         <a
-          v-if="docUrl"
+          v-if="docUrl && !isNormalUser"
           :href="docUrl"
           target="_blank"
           rel="noopener noreferrer"
@@ -264,6 +299,7 @@ const dropdownOpen = ref(false)
 const dropdownRef = ref<HTMLElement | null>(null)
 const contactInfo = computed(() => appStore.contactInfo)
 const docUrl = computed(() => sanitizeUrl(appStore.docUrl))
+const isNormalUser = computed(() => Boolean(user.value) && !authStore.isAdmin)
 const avatarUrl = computed(() => user.value?.avatar_url?.trim() || '')
 const availableBalance = computed(() => Number(user.value?.balance || 0))
 const frozenBalance = computed(() => Number(user.value?.frozen_balance || 0))
@@ -370,6 +406,10 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.header-action {
+  @apply inline-flex min-h-10 min-w-10 items-center justify-center gap-1.5 rounded-lg px-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/50 dark:text-dark-300 dark:hover:bg-dark-800 dark:hover:text-white;
+}
+
 .dropdown-enter-active,
 .dropdown-leave-active {
   transition: all 0.2s ease;

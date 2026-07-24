@@ -260,6 +260,14 @@ import BaseDialog from '@/components/common/BaseDialog.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { useClipboard } from '@/composables/useClipboard'
 import { DEFAULT_MODEL_ID, PRODUCT_MODELS } from '@/constants/models'
+import {
+  buildGeneralConnectionDetails,
+  buildNativeGeminiCurlExample,
+  buildNativeGeminiPowerShellExample,
+  buildOpenAICurlExample,
+  buildOpenAIPowerShellExample,
+  resolveGeneralSetupUrls,
+} from '@/constants/generalSetup'
 import type { GroupPlatform } from '@/types'
 
 interface Props {
@@ -551,21 +559,12 @@ const comment = (value: string) => wrapToken('text-slate-500', value)
 
 const resolvedUrls = computed(() => {
   const baseUrl = props.baseUrl || window.location.origin
-  const baseRoot = baseUrl.replace(/\/v1\/?$/, '').replace(/\/+$/, '')
-  const ensureV1 = (value: string) => {
-    const trimmed = value.replace(/\/+$/, '')
-    return trimmed.endsWith('/v1') ? trimmed : `${trimmed}/v1`
-  }
-  const apiBase = ensureV1(baseRoot)
-  const antigravityBase = ensureV1(`${baseRoot}/antigravity`)
-  const antigravityGeminiBase = (() => {
-    const trimmed = `${baseRoot}/antigravity`.replace(/\/+$/, '')
-    return trimmed.endsWith('/v1beta') ? trimmed : `${trimmed}/v1beta`
-  })()
-  const geminiBase = (() => {
-    const trimmed = baseRoot.replace(/\/+$/, '')
-    return trimmed.endsWith('/v1beta') ? trimmed : `${trimmed}/v1beta`
-  })()
+  const generalUrls = resolveGeneralSetupUrls(baseUrl)
+  const baseRoot = generalUrls.serviceRoot
+  const apiBase = generalUrls.openAIBase
+  const antigravityBase = `${baseRoot}/antigravity/v1`
+  const antigravityGeminiBase = generalUrls.nativeGeminiBase
+  const geminiBase = `${baseRoot}/v1beta`
 
   return { baseUrl, baseRoot, apiBase, antigravityBase, antigravityGeminiBase, geminiBase }
 })
@@ -730,32 +729,18 @@ function generateGeneralFiles(
   geminiBase: string,
   apiKey: string
 ): FileConfig[] {
-  const details = [
-    `Base URL (OpenAI-compatible): ${apiBase}`,
-    `Base URL (native Gemini): ${geminiBase}`,
-    'Authentication (OpenAI-compatible): Authorization: Bearer YOUR_API_KEY',
-    'Authentication (native Gemini): x-goog-api-key: YOUR_API_KEY',
-    'OpenAI-compatible endpoints: POST /chat/completions, POST /responses, GET /models',
-    'Native Gemini endpoint: POST /models/{model}:generateContent',
-    `GPT models: ${PRODUCT_MODELS.filter((model) => model.providerFamily === 'gpt').map((model) => model.id).join(', ')}`,
-    `Gemini models: ${PRODUCT_MODELS.filter((model) => model.providerFamily === 'gemini').map((model) => model.id).join(', ')}`,
-    `Service root: ${baseRoot}`
-  ].join('\n')
+  const details = buildGeneralConnectionDetails(baseRoot)
 
   if (activeTab.value === 'windows') {
     return [
       { path: t('keys.useKeyModal.general.connectionDetails'), content: details },
       {
         path: 'PowerShell',
-        content: `$headers = @{ Authorization = "Bearer ${apiKey}" }
-$body = @{ model = "gpt-5.6-luna"; messages = @(@{ role = "user"; content = "Reply with OK" }) } | ConvertTo-Json -Depth 5
-Invoke-RestMethod -Method Post -Uri "${apiBase}/chat/completions" -Headers $headers -ContentType "application/json" -Body $body`
+        content: buildOpenAIPowerShellExample(apiBase, apiKey),
       },
       {
         path: 'PowerShell',
-        content: `$headers = @{ "x-goog-api-key" = "${apiKey}" }
-$body = @{ contents = @(@{ parts = @(@{ text = "Reply with OK" }) }) } | ConvertTo-Json -Depth 6
-Invoke-RestMethod -Method Post -Uri "${geminiBase}/models/gemini-3.6-flash:generateContent" -Headers $headers -ContentType "application/json" -Body $body`
+        content: buildNativeGeminiPowerShellExample(geminiBase, apiKey),
       }
     ]
   }
@@ -764,17 +749,11 @@ Invoke-RestMethod -Method Post -Uri "${geminiBase}/models/gemini-3.6-flash:gener
     { path: t('keys.useKeyModal.general.connectionDetails'), content: details },
     {
       path: 'Terminal',
-      content: `curl "${apiBase}/chat/completions" \\
-  -H "Authorization: Bearer ${apiKey}" \\
-  -H "Content-Type: application/json" \\
-  -d '{"model":"gpt-5.6-luna","messages":[{"role":"user","content":"Reply with OK"}]}'`
+      content: buildOpenAICurlExample(apiBase, apiKey),
     },
     {
       path: 'Terminal',
-      content: `curl "${geminiBase}/models/gemini-3.6-flash:generateContent" \\
-  -H "x-goog-api-key: ${apiKey}" \\
-  -H "Content-Type: application/json" \\
-  -d '{"contents":[{"parts":[{"text":"Reply with OK"}]}]}'`
+      content: buildNativeGeminiCurlExample(geminiBase, apiKey),
     }
   ]
 }

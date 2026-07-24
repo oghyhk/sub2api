@@ -577,6 +577,32 @@ export default {
     }
   },
 
+  setupDocs: {
+    title: 'API 配置文档',
+    description: '适用于任意兼容工具的通用连接信息与示例',
+    agentTitle: '让 AI 智能体帮你配置工具',
+    agentDescription: '复制下面公开可访问的 Markdown 链接，粘贴给 AI 智能体，并让它配置你当前使用的工具。该页面无需登录即可抓取，也不会包含你的 API 密钥。',
+    copyLink: '复制智能体链接',
+    copied: '已复制',
+    linkCopied: '配置文档链接已复制',
+    loadFailed: '无法加载配置文档',
+    loadFailedDescription: '公开 Markdown 文档暂时不可用，请稍后重试。'
+  },
+
+  pricingPage: {
+    title: '定价',
+    description: '查看你的账户当前可用的模型参考价格',
+    referenceTitle: '参考价格不等于最终账单',
+    referenceDescription: '价格来自可用渠道定价 API。除非标明按次，否则均按每 100 万 token 展示。实际计费可能受分组倍率、用户专属倍率、峰值倍率、订阅或账号倍率影响。',
+    searchPlaceholder: '搜索五个支持的模型...',
+    context: 'token 上下文',
+    unavailable: '当前可用渠道未配置该模型的参考价格。',
+    unavailableShort: '暂无',
+    noGroup: '无可访问分组',
+    noMatches: '没有符合搜索条件的支持模型。',
+    loadFailed: '加载定价失败'
+  },
+
   affiliate: {
     title: '邀请返利',
     description: '邀请新用户注册，并将返利额度转入账户余额',

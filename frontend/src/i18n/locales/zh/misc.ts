@@ -303,6 +303,16 @@ export default {
         title: '🎉 完成创建',
         description:
           '<div style="line-height: 1.7;"><p style="margin-bottom: 12px;">点击确认创建您的 API 密钥。</p><div style="padding: 8px 12px; background: #fee2e2; border-left: 3px solid #ef4444; border-radius: 4px; font-size: 13px; margin-bottom: 12px;"><b>⚠️ 重要：</b><ul style="margin: 8px 0 0 16px;"><li>创建后请立即复制密钥（sk-xxx）</li><li>密钥只显示一次，丢失需重新生成</li></ul></div><p style="padding: 8px 12px; background: #f0fdf4; border-left: 3px solid #10b981; border-radius: 4px; font-size: 13px;"><b>🚀 如何使用：</b><br/>将密钥配置到支持 OpenAI 接口的任何客户端（如 ChatBox、OpenCat 等），即可开始使用！</p><p style="margin-top: 12px; color: #10b981; font-weight: 600;">👉 点击"创建"按钮</p></div>'
+      },
+      keySetup: {
+        title: '🛠️ 打开“设置”',
+        description:
+          '<div style="line-height: 1.7;"><p>密钥已经创建完成。<b>设置</b>操作提供通用 API 和受支持工具的可复制配置说明。</p><p style="margin-top: 12px; color: #10b981; font-weight: 600;">👉 点击新密钥旁边的“设置”</p></div>'
+      },
+      setupHandoff: {
+        title: '🤖 自己配置或交给智能体',
+        description:
+          '<div style="line-height: 1.7;"><p>选择工具和操作系统，然后复制生成的配置，或复制完整的 AI 智能体指令。</p><p style="margin-top: 10px;">以后可以随时从 API 密钥页面重新打开<b>设置</b>。</p></div>'
       }
     }
   },

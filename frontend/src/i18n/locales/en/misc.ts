@@ -279,6 +279,14 @@ export default {
       keySubmit: {
         title: '🎉 Complete Creation',
         description: '<div style="line-height: 1.7;"><p style="margin-bottom: 12px;">Click to confirm and create your API key.</p><div style="padding: 8px 12px; background: #fee2e2; border-left: 3px solid #ef4444; border-radius: 4px; font-size: 13px; margin-bottom: 12px;"><b>⚠️ Important:</b><ul style="margin: 8px 0 0 16px;"><li>Copy the key (sk-xxx) immediately after creation</li><li>Key is only shown once, need to regenerate if lost</li></ul></div><p style="padding: 8px 12px; background: #f0fdf4; border-left: 3px solid #10b981; border-radius: 4px; font-size: 13px;"><b>🚀 How to Use:</b><br/>Configure the key in any OpenAI-compatible client (like ChatBox, OpenCat, etc.) and start using!</p><p style="margin-top: 12px; color: #10b981; font-weight: 600;">👉 Click "Create" button</p></div>'
+      },
+      keySetup: {
+        title: '🛠️ Open Set Up',
+        description: '<div style="line-height: 1.7;"><p>Your key is ready. The <b>Set Up</b> action contains copyable instructions for general APIs and supported tools.</p><p style="margin-top: 12px; color: #10b981; font-weight: 600;">👉 Click “Set Up” beside the new key</p></div>'
+      },
+      setupHandoff: {
+        title: '🤖 Configure Yourself or Hand Off',
+        description: '<div style="line-height: 1.7;"><p>Select a tool and operating system, then copy the generated configuration or the complete AI-agent instruction.</p><p style="margin-top: 10px;">You can reopen <b>Set Up</b> at any time from the API Keys page.</p></div>'
       }
     }
   },

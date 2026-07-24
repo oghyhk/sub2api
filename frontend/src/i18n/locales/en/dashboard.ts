@@ -571,6 +571,32 @@ export default {
     }
   },
 
+  setupDocs: {
+    title: 'API Setup Docs',
+    description: 'General connection details and examples for any compatible tool',
+    agentTitle: 'Let an AI agent configure your tool',
+    agentDescription: 'Copy the public Markdown link below, paste it into your AI agent, and ask the agent to configure your current tool. The page is fetchable without signing in and never contains your API key.',
+    copyLink: 'Copy agent link',
+    copied: 'Copied',
+    linkCopied: 'Setup guide link copied',
+    loadFailed: 'Could not load the setup guide',
+    loadFailedDescription: 'The public Markdown guide is temporarily unavailable. Try again in a moment.'
+  },
+
+  pricingPage: {
+    title: 'Pricing',
+    description: 'Reference model prices available to your account',
+    referenceTitle: 'Reference pricing, not a guaranteed invoice total',
+    referenceDescription: 'Prices come from the available-channel pricing API. Values are shown per 1 million tokens unless marked per request. Your actual billed amount may change with group, user-specific, peak-time, subscription, or account multipliers.',
+    searchPlaceholder: 'Search the five supported models...',
+    context: 'token context',
+    unavailable: 'Reference pricing is not configured for this model on an available channel.',
+    unavailableShort: 'Unavailable',
+    noGroup: 'No accessible group',
+    noMatches: 'No supported models match your search.',
+    loadFailed: 'Failed to load pricing'
+  },
+
   affiliate: {
     title: 'Affiliate Rebates',
     description: 'Invite new users and convert your rebate quota into account balance',

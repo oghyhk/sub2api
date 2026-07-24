@@ -305,5 +305,25 @@ export const getUserSteps = (t: (key: string) => string): DriveStep[] => [
       align: 'center',
       showButtons: ['close']
     }
+  },
+  {
+    element: '[data-tour="key-setup-btn"]',
+    popover: {
+      title: t('onboarding.user.keySetup.title'),
+      description: t('onboarding.user.keySetup.description'),
+      side: 'left',
+      align: 'center',
+      showButtons: ['close']
+    }
+  },
+  {
+    element: '[data-testid="setup-handoff"]',
+    popover: {
+      title: t('onboarding.user.setupHandoff.title'),
+      description: t('onboarding.user.setupHandoff.description'),
+      side: 'left',
+      align: 'center',
+      showButtons: ['next', 'previous']
+    }
   }
 ]

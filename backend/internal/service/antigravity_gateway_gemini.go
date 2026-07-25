@@ -485,6 +485,14 @@ func cleanGeminiRequest(body []byte) ([]byte, error) {
 					cleaned := antigravity.CleanJSONSchema(params)
 					funcMap["parameters"] = cleaned
 					modified = true
+				} else {
+					// Antigravity translates Gemini tools to Claude format for Claude models.
+					// Claude strictly requires an input_schema. If parameters is omitted, it fails.
+					funcMap["parameters"] = map[string]any{
+						"type":       "object",
+						"properties": map[string]any{},
+					}
+					modified = true
 				}
 			}
 		}

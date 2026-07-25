@@ -322,6 +322,9 @@ func applyThinkingModelSuffix(mappedModel string, thinkingEnabled bool) string {
 	if mappedModel == "claude-sonnet-4-5" {
 		return "claude-sonnet-4-5-thinking"
 	}
+	if mappedModel == "claude-opus-4-6" {
+		return "claude-opus-4-6-thinking"
+	}
 	return mappedModel
 }
 

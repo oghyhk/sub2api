@@ -1396,8 +1396,8 @@ function getAntigravityTierClass(row: any): string {
 const allColumns = computed(() => {
   const c = [
     { key: 'select', label: '', sortable: false },
-    { key: 'name', label: t('admin.accounts.columns.name'), sortable: true },
     { key: 'id', label: t('admin.accounts.columns.id'), sortable: true },
+    { key: 'name', label: t('admin.accounts.columns.name'), sortable: true },
     { key: 'platform_type', label: t('admin.accounts.columns.platformType'), sortable: false },
     { key: 'capacity', label: t('admin.accounts.columns.capacity'), sortable: false },
     { key: 'status', label: t('admin.accounts.columns.status'), sortable: true },
@@ -1423,15 +1423,15 @@ const allColumns = computed(() => {
   return c
 })
 
-// Columns that can be toggled (exclude select, name, and actions)
+// Columns that can be toggled (exclude select, id, and actions)
 const toggleableColumns = computed(() =>
-  allColumns.value.filter(col => col.key !== 'select' && col.key !== 'name' && col.key !== 'actions')
+  allColumns.value.filter(col => col.key !== 'select' && col.key !== 'id' && col.key !== 'actions')
 )
 
 // Filtered columns based on visibility
 const cols = computed(() =>
   allColumns.value.filter(col =>
-    col.key === 'select' || col.key === 'name' || col.key === 'actions' || !hiddenColumns.has(col.key)
+    col.key === 'select' || col.key === 'id' || col.key === 'actions' || !hiddenColumns.has(col.key)
   )
 )
 

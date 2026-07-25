@@ -21,8 +21,56 @@
         </div>
       </div>
 
+            <!-- Recommended Setup -->
+      <div v-if="showRecommended" class="space-y-4">
+        <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Recommended use case: Set up for ChatGPT desktop App</h3>
+        <p class="text-sm text-gray-600 dark:text-gray-400">
+          Copy the prompt below and paste it to your coding agent (e.g., Cursor, GitHub Copilot) to automatically set up the ChatGPT desktop app.
+        </p>
+        
+        <div class="overflow-hidden rounded-lg bg-gray-950 dark:bg-black">
+          <div class="flex items-center justify-between gap-3 border-b border-gray-800 bg-gray-900 px-3 py-2">
+            <span class="min-w-0 truncate font-mono text-xs text-gray-400">Setup Prompt for AI Agent</span>
+            <button
+              type="button"
+              class="flex min-h-11 flex-shrink-0 cursor-pointer items-center gap-2 rounded-md px-3 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 bg-primary-600 text-white hover:bg-primary-500"
+              @click="copyContent(`Please help me set up the ChatGPT desktop app (Codex Desktop) to use my Sub2API key.\n\nMy API base URL is: ${setupEndpoints[0]}\nMy API Key is: ${apiKey}\n\nIn case GPT models fail, please also set up Gemini 3.1 Pro. Codex Desktop omitted the native gemini-3.1-pro ID, so please expose it as gpt-5.4 with display name 'Gemini 3.1 Pro' and only 'high' effort. Use LiteLLM to map gpt-5.4 to gemini/gemini-3.1-pro by updating both model-catalog.json and config.yaml, restart the port 4011 bridge, then fully restart every OpenAI.Codex MSIX process.\n\nIf the ChatGPT desktop app is not installed on my system, please install it for me or guide me on how to do it.`, -1)"
+            >
+              <Icon name="clipboard" size="sm" />
+              Copy Prompt
+            </button>
+          </div>
+          <div class="p-4 font-mono text-xs leading-5 text-gray-200 whitespace-pre-wrap break-words">Please help me set up the ChatGPT desktop app (Codex Desktop) to use my Sub2API key.
+
+My API base URL is: {{ setupEndpoints[0] }}
+My API Key is: {{ apiKey }}
+
+In case GPT models fail, please also set up Gemini 3.1 Pro. Codex Desktop omitted the native gemini-3.1-pro ID, so please expose it as gpt-5.4 with display name 'Gemini 3.1 Pro' and only 'high' effort. Use LiteLLM to map gpt-5.4 to gemini/gemini-3.1-pro by updating both model-catalog.json and config.yaml, restart the port 4011 bridge, then fully restart every OpenAI.Codex MSIX process.
+
+If the ChatGPT desktop app is not installed on my system, please install it for me or guide me on how to do it.</div>
+        </div>
+
+        <div class="flex justify-end gap-3 pt-2">
+          <button
+            type="button"
+            class="btn btn-secondary"
+            @click="emit('close')"
+          >
+            {{ t('common.close') }}
+          </button>
+          <button
+            type="button"
+            class="btn btn-primary"
+            @click="showRecommended = false"
+          >
+            Set up for other tools
+          </button>
+        </div>
+      </div>
+
       <!-- Platform-specific content -->
-      <template v-else>
+
+      <template v-else-if="!showRecommended">
         <p class="text-sm leading-6 text-gray-600 dark:text-gray-400">
           {{ platformDescription }}
         </p>

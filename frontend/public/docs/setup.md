@@ -82,6 +82,22 @@ curl "https://api.k2598.com/antigravity/v1beta/models/gemini-3.6-flash:generateC
 6. Save, start a new session, and send a small test request.
 7. If the tool appends `/v1` automatically, give it `https://api.k2598.com`; otherwise use `https://api.k2598.com/v1`.
 
+
+### Setting up ChatGPT desktop app (Codex Desktop)
+
+If you are using the ChatGPT desktop app (Codex Desktop), you can pass this exact prompt to an AI agent to do it for you:
+
+```text
+Please help me set up the ChatGPT desktop app (Codex Desktop) to use my Sub2API key.
+
+My API base URL is: https://api.k2598.com/v1
+My API Key is: [Replace with your API Key]
+
+In case GPT models fail, please also set up Gemini 3.1 Pro. Codex Desktop omitted the native gemini-3.1-pro ID, so please expose it as gpt-5.4 with display name 'Gemini 3.1 Pro' and only 'high' effort. Use LiteLLM to map gpt-5.4 to gemini/gemini-3.1-pro by updating both model-catalog.json and config.yaml, restart the port 4011 bridge, then fully restart every OpenAI.Codex MSIX process.
+
+If the ChatGPT desktop app is not installed on my system, please install it for me or guide me on how to do it.
+```
+
 ## AI-agent instruction
 
 Paste this page URL into your AI agent with:

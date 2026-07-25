@@ -290,6 +290,10 @@ const props = withDefaults(defineProps<{
   rankingTotalActualCost?: number
   rankingTotalRequests?: number
   rankingTotalTokens?: number
+  totalTokens?: number
+  totalActualCost?: number
+  totalRequests?: number
+  totalCost?: number
   loading?: boolean
   metric?: DistributionMetric
   showSourceToggle?: boolean
@@ -384,7 +388,33 @@ const displayModelStats = computed(() => {
   if (!sourceStats?.length) return []
 
   const metricKey = props.metric === 'actual_cost' ? 'actual_cost' : 'total_tokens'
-  return [...sourceStats].sort((a, b) => toFiniteNumber(b[metricKey]) - toFiniteNumber(a[metricKey]))
+  const sorted = [...sourceStats].sort((a, b) => toFiniteNumber(b[metricKey]) - toFiniteNumber(a[metricKey]))
+
+  if (props.totalTokens !== undefined) {
+    const currentActualCost = sourceStats.reduce((sum, item) => sum + toFiniteNumber(item.actual_cost), 0)
+    const currentTokens = sourceStats.reduce((sum, item) => sum + toFiniteNumber(item.total_tokens), 0)
+    const currentRequests = sourceStats.reduce((sum, item) => sum + toFiniteNumber(item.requests), 0)
+
+    const otherTokens = Math.max((props.totalTokens || 0) - currentTokens, 0)
+    const otherActualCost = Math.max((props.totalActualCost || 0) - currentActualCost, 0)
+    const otherRequests = Math.max((props.totalRequests || 0) - currentRequests, 0)
+
+    if (otherTokens > 0 || otherActualCost > 0.000001 || otherRequests > 0) {
+      sorted.push({
+        model: 'Others (Pre-migration)',
+        actual_cost: otherActualCost,
+        total_tokens: otherTokens,
+        requests: otherRequests,
+        input_tokens: 0,
+        output_tokens: 0,
+        cache_creation_tokens: 0,
+        cache_read_tokens: 0,
+        cost: Math.max((props.totalCost || 0) - sourceStats.reduce((sum, item) => sum + toFiniteNumber(item.cost), 0), 0)
+      } as any)
+    }
+  }
+
+  return sorted
 })
 
 const chartData = computed(() => {

@@ -21,9 +21,16 @@
         </div>
       </div>
 
-            <!-- Recommended Setup -->
+                  <!-- Recommended Setup -->
       <div v-if="showRecommended" class="space-y-4">
         <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Recommended use case: Set up for ChatGPT desktop App</h3>
+        
+        <div class="flex items-center gap-2">
+          <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Select OS:</span>
+          <button @click="recommendedOs = 'mac'" :class="recommendedOs === 'mac' ? 'bg-primary-600 text-white' : 'bg-gray-200 dark:bg-dark-700 text-gray-700 dark:text-gray-300'" class="px-3 py-1 rounded text-xs font-medium transition-colors">Mac</button>
+          <button @click="recommendedOs = 'windows'" :class="recommendedOs === 'windows' ? 'bg-primary-600 text-white' : 'bg-gray-200 dark:bg-dark-700 text-gray-700 dark:text-gray-300'" class="px-3 py-1 rounded text-xs font-medium transition-colors">Windows</button>
+        </div>
+        
         <p class="text-sm text-gray-600 dark:text-gray-400">
           Copy the prompt below and paste it to your coding agent (e.g., Cursor, GitHub Copilot) to automatically set up the ChatGPT desktop app.
         </p>
@@ -34,41 +41,19 @@
             <button
               type="button"
               class="flex min-h-11 flex-shrink-0 cursor-pointer items-center gap-2 rounded-md px-3 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 bg-primary-600 text-white hover:bg-primary-500"
-              @click="copyContent(`Please help me set up the ChatGPT desktop app (Codex Desktop) to use my Sub2API key.\n\nMy API base URL is: ${setupEndpoints[0]}\nMy API Key is: ${apiKey}\n\nIn case GPT models fail, please also set up Gemini 3.1 Pro. Codex Desktop omitted the native gemini-3.1-pro ID, so please expose it as gpt-5.4 with display name 'Gemini 3.1 Pro' and only 'high' effort. Use LiteLLM to map gpt-5.4 to gemini/gemini-3.1-pro by updating both model-catalog.json and config.yaml, restart the port 4011 bridge, then fully restart every OpenAI.Codex MSIX process.\n\nIf the ChatGPT desktop app is not installed on my system, please install it for me or guide me on how to do it.`, -1)"
+              @click="copyContent(recommendedPrompt, -1)"
             >
               <Icon name="clipboard" size="sm" />
               Copy Prompt
             </button>
           </div>
-          <div class="p-4 font-mono text-xs leading-5 text-gray-200 whitespace-pre-wrap break-words">Please help me set up the ChatGPT desktop app (Codex Desktop) to use my Sub2API key.
-
-My API base URL is: {{ setupEndpoints[0] }}
-My API Key is: {{ apiKey }}
-
-In case GPT models fail, please also set up Gemini 3.1 Pro. Codex Desktop omitted the native gemini-3.1-pro ID, so please expose it as gpt-5.4 with display name 'Gemini 3.1 Pro' and only 'high' effort. Use LiteLLM to map gpt-5.4 to gemini/gemini-3.1-pro by updating both model-catalog.json and config.yaml, restart the port 4011 bridge, then fully restart every OpenAI.Codex MSIX process.
-
-If the ChatGPT desktop app is not installed on my system, please install it for me or guide me on how to do it.</div>
+          <div class="p-4 font-mono text-xs leading-5 text-gray-200 whitespace-pre-wrap break-words">{{ recommendedPrompt }}</div>
         </div>
-
         <div class="flex justify-end gap-3 pt-2">
-          <button
-            type="button"
-            class="btn btn-secondary"
-            @click="emit('close')"
-          >
-            {{ t('common.close') }}
-          </button>
-          <button
-            type="button"
-            class="btn btn-primary"
-            @click="showRecommended = false"
-          >
-            Set up for other tools
-          </button>
+          <button type="button" class="btn btn-secondary" @click="emit('close')">{{ t('common.close') }}</button>
+          <button type="button" class="btn btn-primary" @click="showRecommended = false">Set up for other tools</button>
         </div>
       </div>
-
-      <!-- Platform-specific content -->
 
       <template v-else-if="!showRecommended">
         <p class="text-sm leading-6 text-gray-600 dark:text-gray-400">
@@ -362,6 +347,44 @@ const activeClientTab = ref<string>('claude')
 type CodexAuthMode = 'legacy' | 'api-key'
 const codexAuthMode = ref<CodexAuthMode>('legacy')
 
+const showRecommended = ref(true)
+const recommendedOs = ref<'mac' | 'windows'>('windows')
+
+const recommendedPrompt = computed(() => {
+  if (recommendedOs.value === 'windows') {
+    return `Please help me set up the ChatGPT desktop app (Codex Desktop) on Windows to use my Sub2API key.
+
+My API base URL is: ${setupEndpoints.value[0]}
+My Native Gemini Base URL is: ${window.location.origin}/antigravity/v1beta
+My API Key is: ${props.apiKey}
+
+Please follow the Sub2API Codex Desktop architecture:
+1. Prevent OpenAI model discovery: keep Codex signed out, set \`model_provider = "sub2api"\` in \`~/.codex/config.toml\`, use an absolute local \`model_catalog_json\` path, and set \`[model_providers.sub2api] requires_openai_auth = false\`.
+2. LiteLLM bridge (\`127.0.0.1:4011\`): Create 5 upstream routes in \`~/.codex/providers/sub2api-bridge/config.yaml\`: \`gpt-5.6-sol\`, \`gpt-5.6-terra\`, \`gpt-5.6-luna\`, \`gpt-5.4\` (mapped to \`gemini/gemini-3.1-pro\`), and \`gemini-3.6-flash\`.
+3. Model catalog (\`~/.codex/providers/sub2api-bridge/model-catalog.json\`): Add all 5 entries. For \`gpt-5.4\`, set display name to "Gemini 3.1 Pro" and effort to "high".
+4. Set up an on-demand bridge launcher (\`ensure-bridge.ps1\`) and runner (\`bridge-runner.py\`). Configure \`[model_providers.sub2api.auth]\` in \`config.toml\` to call \`powershell.exe -NoProfile -ExecutionPolicy Bypass -File ... ensure-bridge.ps1\`.
+5. Credentials: Store the Sub2API key and a random bridge token as Windows user environment variables (\`SUB2API_API_KEY\`, \`CODEX_SUB2API_BRIDGE_KEY\`). Do not write them into any config files! The bridge launcher must pass them to the bridge and return the bridge token to Codex.
+6. Subagent: In \`config.toml\`, set \`[agents] default_subagent_model = "gemini-3.6-flash"\` and medium effort. Set up \`~/.codex/agents/gemini_flash.toml\` to select it directly.
+7. Restart: Stop the port 4011 process, stop every \`OpenAI.Codex\` MSIX process (including \`ChatGPT.exe\` host and backend), then relaunch.
+8. Validate using active \`CODEX_CLI_PATH\`: \`debug models\` must return exactly the 5 local entries.`
+  } else {
+    return `Please help me set up the ChatGPT desktop app (Codex Desktop) on macOS to use my Sub2API key.
+
+My API base URL is: ${setupEndpoints.value[0]}
+My Native Gemini Base URL is: ${window.location.origin}/antigravity/v1beta
+My API Key is: ${props.apiKey}
+
+Please follow the Sub2API Codex Desktop architecture:
+1. Prevent OpenAI model discovery: keep Codex signed out, set \`model_provider = "sub2api"\` in \`~/.codex/config.toml\`, use an absolute local \`model_catalog_json\` path, and set \`[model_providers.sub2api] requires_openai_auth = false\`.
+2. LiteLLM bridge (\`127.0.0.1:4011\`): Create 5 upstream routes in \`~/.codex/providers/sub2api-bridge/config.yaml\`: \`gpt-5.6-sol\`, \`gpt-5.6-terra\`, \`gpt-5.6-luna\`, \`gpt-5.4\` (mapped to \`gemini/gemini-3.1-pro\`), and \`gemini-3.6-flash\`.
+3. Model catalog (\`~/.codex/providers/sub2api-bridge/model-catalog.json\`): Add all 5 entries. For \`gpt-5.4\`, set display name to "Gemini 3.1 Pro" and effort to "high".
+4. Set up an on-demand bridge launcher (\`ensure-bridge.sh\`) and runner (\`bridge-runner.py\`). Configure \`[model_providers.sub2api.auth]\` in \`config.toml\` to call \`bash ... ensure-bridge.sh\`.
+5. Credentials: Store the Sub2API key and a random bridge token securely in the macOS user environment (e.g. \`~/.zshenv\` or LaunchAgents) so the bridge launcher can read them. Do not write them into any config files! The bridge launcher must pass them to the bridge and return the bridge token to Codex.
+6. Subagent: In \`config.toml\`, set \`[agents] default_subagent_model = "gemini-3.6-flash"\` and medium effort. Set up \`~/.codex/agents/gemini_flash.toml\` to select it directly.
+7. Restart: Stop the port 4011 process, fully quit the Codex Desktop app (Cmd+Q) and all its background processes, then relaunch.
+8. Validate using active \`CODEX_CLI_PATH\`: \`debug models\` must return exactly the 5 local entries.`
+  }
+})
 // Reset tabs when platform changes
 const defaultClientTab = computed(() => {
   switch (props.platform) {

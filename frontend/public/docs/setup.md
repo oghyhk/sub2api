@@ -85,17 +85,44 @@ curl "https://api.k2598.com/antigravity/v1beta/models/gemini-3.6-flash:generateC
 
 ### Setting up ChatGPT desktop app (Codex Desktop)
 
-If you are using the ChatGPT desktop app (Codex Desktop), you can pass this exact prompt to an AI agent to do it for you:
+If you are using the ChatGPT desktop app (Codex Desktop), you can pass one of these exact prompts to an AI agent to set it up for you:
 
+**For Windows:**
 ```text
-Please help me set up the ChatGPT desktop app (Codex Desktop) to use my Sub2API key.
+Please help me set up the ChatGPT desktop app (Codex Desktop) on Windows to use my Sub2API key.
 
 My API base URL is: https://api.k2598.com/v1
+My Native Gemini Base URL is: https://api.k2598.com/antigravity/v1beta
 My API Key is: [Replace with your API Key]
 
-In case GPT models fail, please also set up Gemini 3.1 Pro. Codex Desktop omitted the native gemini-3.1-pro ID, so please expose it as gpt-5.4 with display name 'Gemini 3.1 Pro' and only 'high' effort. Use LiteLLM to map gpt-5.4 to gemini/gemini-3.1-pro by updating both model-catalog.json and config.yaml, restart the port 4011 bridge, then fully restart every OpenAI.Codex MSIX process.
+Please follow the Sub2API Codex Desktop architecture:
+1. Prevent OpenAI model discovery: keep Codex signed out, set `model_provider = "sub2api"` in `~/.codex/config.toml`, use an absolute local `model_catalog_json` path, and set `[model_providers.sub2api] requires_openai_auth = false`.
+2. LiteLLM bridge (`127.0.0.1:4011`): Create 5 upstream routes in `~/.codex/providers/sub2api-bridge/config.yaml`: `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.4` (mapped to `gemini/gemini-3.1-pro`), and `gemini-3.6-flash`.
+3. Model catalog (`~/.codex/providers/sub2api-bridge/model-catalog.json`): Add all 5 entries. For `gpt-5.4`, set display name to "Gemini 3.1 Pro" and effort to "high".
+4. Set up an on-demand bridge launcher (`ensure-bridge.ps1`) and runner (`bridge-runner.py`). Configure `[model_providers.sub2api.auth]` in `config.toml` to call `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ... ensure-bridge.ps1`.
+5. Credentials: Store the Sub2API key and a random bridge token as Windows user environment variables (`SUB2API_API_KEY`, `CODEX_SUB2API_BRIDGE_KEY`). Do not write them into any config files! The bridge launcher must pass them to the bridge and return the bridge token to Codex.
+6. Subagent: In `config.toml`, set `[agents] default_subagent_model = "gemini-3.6-flash"` and medium effort. Set up `~/.codex/agents/gemini_flash.toml` to select it directly.
+7. Restart: Stop the port 4011 process, stop every `OpenAI.Codex` MSIX process (including `ChatGPT.exe` host and backend), then relaunch.
+8. Validate using active `CODEX_CLI_PATH`: `debug models` must return exactly the 5 local entries.
+```
 
-If the ChatGPT desktop app is not installed on my system, please install it for me or guide me on how to do it.
+**For macOS:**
+```text
+Please help me set up the ChatGPT desktop app (Codex Desktop) on macOS to use my Sub2API key.
+
+My API base URL is: https://api.k2598.com/v1
+My Native Gemini Base URL is: https://api.k2598.com/antigravity/v1beta
+My API Key is: [Replace with your API Key]
+
+Please follow the Sub2API Codex Desktop architecture:
+1. Prevent OpenAI model discovery: keep Codex signed out, set `model_provider = "sub2api"` in `~/.codex/config.toml`, use an absolute local `model_catalog_json` path, and set `[model_providers.sub2api] requires_openai_auth = false`.
+2. LiteLLM bridge (`127.0.0.1:4011`): Create 5 upstream routes in `~/.codex/providers/sub2api-bridge/config.yaml`: `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.4` (mapped to `gemini/gemini-3.1-pro`), and `gemini-3.6-flash`.
+3. Model catalog (`~/.codex/providers/sub2api-bridge/model-catalog.json`): Add all 5 entries. For `gpt-5.4`, set display name to "Gemini 3.1 Pro" and effort to "high".
+4. Set up an on-demand bridge launcher (`ensure-bridge.sh`) and runner (`bridge-runner.py`). Configure `[model_providers.sub2api.auth]` in `config.toml` to call `bash ... ensure-bridge.sh`.
+5. Credentials: Store the Sub2API key and a random bridge token securely in the macOS user environment (e.g. `~/.zshenv` or LaunchAgents) so the bridge launcher can read them. Do not write them into any config files! The bridge launcher must pass them to the bridge and return the bridge token to Codex.
+6. Subagent: In `config.toml`, set `[agents] default_subagent_model = "gemini-3.6-flash"` and medium effort. Set up `~/.codex/agents/gemini_flash.toml` to select it directly.
+7. Restart: Stop the port 4011 process, fully quit the Codex Desktop app (Cmd+Q) and all its background processes, then relaunch.
+8. Validate using active `CODEX_CLI_PATH`: `debug models` must return exactly the 5 local entries.
 ```
 
 ## AI-agent instruction

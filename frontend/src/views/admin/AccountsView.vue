@@ -1397,7 +1397,7 @@ const allColumns = computed(() => {
   const c = [
     { key: 'select', label: '', sortable: false },
     { key: 'id', label: t('admin.accounts.columns.id'), sortable: true },
-    { key: 'name', label: t('admin.accounts.columns.name'), sortable: true },
+    { key: 'usage', label: t('admin.accounts.columns.usageWindows'), sortable: false },
     { key: 'platform_type', label: t('admin.accounts.columns.platformType'), sortable: false },
     { key: 'capacity', label: t('admin.accounts.columns.capacity'), sortable: false },
     { key: 'status', label: t('admin.accounts.columns.status'), sortable: true },
@@ -1408,7 +1408,7 @@ const allColumns = computed(() => {
     c.push({ key: 'groups', label: t('admin.accounts.columns.groups'), sortable: false })
   }
   c.push(
-    { key: 'usage', label: t('admin.accounts.columns.usageWindows'), sortable: false },
+    { key: 'name', label: t('admin.accounts.columns.name'), sortable: true },
     { key: 'proxy', label: t('admin.accounts.columns.proxy'), sortable: false },
     { key: 'priority', label: t('admin.accounts.columns.priority'), sortable: true },
     { key: 'scheduler_score', label: t('admin.accounts.columns.schedulerScore'), sortable: false },

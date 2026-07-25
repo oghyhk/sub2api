@@ -46,6 +46,9 @@ var (
 // SessionContext 粘性会话上下文，用于区分不同来源的请求。
 // 仅在 GenerateSessionHash 第 3 级 fallback（消息内容 hash）时混入，
 // 避免不同用户发送相同消息产生相同 hash 导致账号集中。
+// ClientIP is retained for callers that need request metadata, but it must not
+// participate in sticky affinity because reverse-proxy and mobile egress
+// addresses can change between consecutive requests.
 type SessionContext struct {
 	ClientIP  string
 	UserAgent string

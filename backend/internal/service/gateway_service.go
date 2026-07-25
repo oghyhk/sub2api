@@ -841,8 +841,6 @@ func (s *GatewayService) GenerateSessionHash(parsed *ParsedRequest) string {
 	var combined strings.Builder
 	// 混入请求上下文区分因子，避免不同用户相同消息产生相同 hash
 	if parsed.SessionContext != nil {
-		_, _ = combined.WriteString(parsed.SessionContext.ClientIP)
-		_, _ = combined.WriteString(":")
 		_, _ = combined.WriteString(NormalizeSessionUserAgent(parsed.SessionContext.UserAgent))
 		_, _ = combined.WriteString(":")
 		_, _ = combined.WriteString(strconv.FormatInt(parsed.SessionContext.APIKeyID, 10))

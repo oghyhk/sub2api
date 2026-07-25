@@ -322,7 +322,7 @@ func TestGenerateSessionHash_SameSystemSameMessageDifferentContext(t *testing.T)
 	require.NotEqual(t, h1, h2, "CRITICAL: same system+messages but different users should get different hashes")
 }
 
-func TestGenerateSessionHash_SessionContext_IPDifference(t *testing.T) {
+func TestGenerateSessionHash_SessionContext_IPDifferenceIgnored(t *testing.T) {
 	svc := &GatewayService{}
 	body := anthropicSessionBody(nil, []any{msg("user", "test")}, "")
 	base := func(ip string) *ParsedRequest {
@@ -331,7 +331,7 @@ func TestGenerateSessionHash_SessionContext_IPDifference(t *testing.T) {
 
 	h1 := svc.GenerateSessionHash(base("1.1.1.1"))
 	h2 := svc.GenerateSessionHash(base("2.2.2.2"))
-	require.NotEqual(t, h1, h2, "different IP should produce different hash")
+	require.Equal(t, h1, h2, "proxy or mobile IP changes must not perturb sticky account affinity")
 }
 
 func TestGenerateSessionHash_SessionContext_UADifference(t *testing.T) {

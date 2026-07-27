@@ -311,17 +311,16 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 		if len(routingCandidates) > 0 {
 			routingWarmup, _ := partitionWeeklyWarmupAccounts(routingCandidates, requestedModel, time.Now())
 			routingWarmupActive := len(routingWarmup) > 0
-			if routingWarmupActive {
-				routingCandidates = routingWarmup
-			}
 			// 1.5. 在路由账号范围内检查粘性会话
-			if !routingWarmupActive && sessionHash != "" && stickyAccountID > 0 {
+			// 粘性优先于 warmup：即使 warmup 激活也先检查已有绑定
+			if sessionHash != "" && stickyAccountID > 0 {
 				slog.Debug("sticky.layer1_5_checking",
 					"sticky_account_id", stickyAccountID,
 					"in_routing_list", containsInt64(routingAccountIDs, stickyAccountID),
 					"is_excluded", isExcluded(stickyAccountID),
 					"in_account_map", func() bool { _, ok := accountByID[stickyAccountID]; return ok }(),
 					"session", shortSessionHash(sessionHash),
+					"warmup_active", routingWarmupActive,
 				)
 				if containsInt64(routingAccountIDs, stickyAccountID) && !isExcluded(stickyAccountID) {
 					// 粘性账号在路由列表中，优先使用
@@ -403,6 +402,11 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 							stickyAccountID, shortSessionHash(sessionHash))
 					}
 				}
+			}
+
+			// 粘性未命中，warmup 过滤在此应用（仅影响负载均衡选择）
+			if routingWarmupActive {
+				routingCandidates = routingWarmup
 			}
 
 			// 2. 批量获取负载信息
@@ -494,7 +498,8 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 	warmupCandidateIDs := s.gatewayWeeklyWarmupCandidateIDs(ctx, accounts, platform, useMixed, requestedModel, excludedIDs)
 
 	// ============ Layer 1.5: 粘性会话（仅在无模型路由配置时生效） ============
-	if len(routingAccountIDs) == 0 && len(warmupCandidateIDs) == 0 && sessionHash != "" && stickyAccountID > 0 && !isExcluded(stickyAccountID) {
+	// 粘性优先于 warmup：即使有 warmup 候选也先检查已有绑定
+	if len(routingAccountIDs) == 0 && sessionHash != "" && stickyAccountID > 0 && !isExcluded(stickyAccountID) {
 		accountID := stickyAccountID
 		if accountID > 0 && !isExcluded(accountID) {
 			account, ok := accountByID[accountID]
@@ -597,7 +602,7 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 				)
 			}
 		}
-	} else if len(routingAccountIDs) == 0 && len(warmupCandidateIDs) == 0 && sessionHash != "" {
+	} else if len(routingAccountIDs) == 0 && sessionHash != "" {
 		slog.Debug("sticky.layer1_5_no_routing_skip",
 			"sticky_account_id", stickyAccountID,
 			"is_excluded", func() bool { return stickyAccountID > 0 && isExcluded(stickyAccountID) }(),

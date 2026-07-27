@@ -9,7 +9,7 @@ import (
 )
 
 // digestSessionTTL 摘要会话默认 TTL
-const digestSessionTTL = 5 * time.Minute
+const digestSessionTTL = 30 * time.Minute
 
 // sessionEntry flat cache 条目
 type sessionEntry struct {

@@ -62,6 +62,9 @@ IMPORTANT: You must NEVER generate or guess URLs for the user unless you are con
 	debugGatewayBodyEnv                    = "SUB2API_DEBUG_GATEWAY_BODY"
 	// 上游错误体只需要提取错误 JSON/日志摘要，默认 512KiB 避免错误风暴叠加大请求体。
 	gatewayUpstreamErrorBodyReadLimit int64 = 512 << 10
+	// sessionHashFallbackMaxMessages 限制 fallback hash 仅取前 N 条消息，
+	// 避免随对话增长 hash 持续变化导致粘性绑定丢失。
+	sessionHashFallbackMaxMessages = 4
 )
 
 const (
@@ -837,7 +840,8 @@ func (s *GatewayService) GenerateSessionHash(parsed *ParsedRequest) string {
 		return hash
 	}
 
-	// 3. 最后 fallback: 使用 session上下文 + system + 所有消息的完整摘要串
+	// 3. 最后 fallback: 使用 session上下文 + system + 前几条消息的摘要串
+	//    只取前 N 条消息，避免随对话增长 hash 持续变化导致粘性绑定丢失
 	var combined strings.Builder
 	// 混入请求上下文区分因子，避免不同用户相同消息产生相同 hash
 	if parsed.SessionContext != nil {
@@ -850,7 +854,7 @@ func (s *GatewayService) GenerateSessionHash(parsed *ParsedRequest) string {
 		_, _ = combined.WriteString(systemText)
 	}
 	contentStart := combined.Len()
-	appendMessageTextsFromRaw(&combined, parsed.MessagesRaw())
+	appendFirstNMessageTextsFromRaw(&combined, parsed.MessagesRaw(), sessionHashFallbackMaxMessages)
 	if combined.Len() == contentStart {
 		appendResponsesSessionAnchorFromRaw(&combined, parsed.InputRaw())
 	}
@@ -1005,6 +1009,39 @@ func appendMessageTextsFromRaw(builder *strings.Builder, raw []byte) {
 		return
 	}
 	messages.ForEach(func(_, msg gjson.Result) bool {
+		if content := msg.Get("content"); content.Exists() {
+			_, _ = builder.WriteString(extractTextFromContentRaw(content))
+			return true
+		}
+		parts := msg.Get("parts")
+		if parts.IsArray() {
+			parts.ForEach(func(_, part gjson.Result) bool {
+				if text := part.Get("text").String(); text != "" {
+					_, _ = builder.WriteString(text)
+				}
+				return true
+			})
+		}
+		return true
+	})
+}
+
+// appendFirstNMessageTextsFromRaw 与 appendMessageTextsFromRaw 相同，
+// 但最多只处理前 maxN 条消息，防止随对话增长 hash 不断变化。
+func appendFirstNMessageTextsFromRaw(builder *strings.Builder, raw []byte, maxN int) {
+	if builder == nil || len(raw) == 0 || maxN <= 0 {
+		return
+	}
+	messages := parseRawJSONView(raw)
+	if !messages.IsArray() {
+		return
+	}
+	count := 0
+	messages.ForEach(func(_, msg gjson.Result) bool {
+		if count >= maxN {
+			return false
+		}
+		count++
 		if content := msg.Get("content"); content.Exists() {
 			_, _ = builder.WriteString(extractTextFromContentRaw(content))
 			return true

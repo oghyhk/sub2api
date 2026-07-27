@@ -676,7 +676,8 @@ func EnsureToolUseIDs(body []byte) []byte {
 // functionResponse 上的未知字段如 tool_use_id）。Google 的配对逻辑依赖顺序而非 id，
 // 因此仅修复 functionCall.id 即可让上下游正确关联 tool_use ↔ tool_result。
 func EnsureGeminiFunctionCallIDs(body []byte) []byte {
-	if !bytes.Contains(body, []byte(`"functionCall"`)) {
+	if !bytes.Contains(body, []byte(`"functionCall"`)) &&
+		!bytes.Contains(body, []byte(`"functionResponse"`)) {
 		return body
 	}
 
@@ -690,8 +691,10 @@ func EnsureGeminiFunctionCallIDs(body []byte) []byte {
 		return body
 	}
 
+	// First pass: assign IDs to functionCalls, track by name.
+	pendingByName := make(map[string][]string)
 	modified := false
-
+	counter := 0
 	for _, turn := range contentsSlice {
 		turnMap, ok := turn.(map[string]any)
 		if !ok {
@@ -701,17 +704,53 @@ func EnsureGeminiFunctionCallIDs(body []byte) []byte {
 		if !ok {
 			continue
 		}
-		for _, part := range parts {
+		for ci, part := range parts {
 			partMap, ok := part.(map[string]any)
 			if !ok {
 				continue
 			}
-
 			if fc, ok := partMap["functionCall"].(map[string]any); ok {
 				id, _ := fc["id"].(string)
 				if strings.TrimSpace(id) == "" {
-					fc["id"] = "toolu_" + randomHex(12)
+					counter++
+					id = fmt.Sprintf("toolu_%s", randomHex(8))
+					fc["id"] = id
 					modified = true
+				}
+				name, _ := fc["name"].(string)
+				pendingByName[name] = append(pendingByName[name], id)
+				parts[ci] = partMap
+			}
+		}
+	}
+
+	// Second pass: match functionResponse.id from pending call IDs by name.
+	if modified || len(pendingByName) > 0 {
+		for _, turn := range contentsSlice {
+			turnMap, ok := turn.(map[string]any)
+			if !ok {
+				continue
+			}
+			parts, ok := turnMap["parts"].([]any)
+			if !ok {
+				continue
+			}
+			for ci, part := range parts {
+				partMap, ok := part.(map[string]any)
+				if !ok {
+					continue
+				}
+				if fr, ok := partMap["functionResponse"].(map[string]any); ok {
+					respID, _ := fr["id"].(string)
+					if strings.TrimSpace(respID) == "" {
+						name, _ := fr["name"].(string)
+						if queue, ok := pendingByName[name]; ok && len(queue) > 0 {
+							fr["id"] = queue[0]
+							pendingByName[name] = queue[1:]
+							modified = true
+							parts[ci] = partMap
+						}
+					}
 				}
 			}
 		}

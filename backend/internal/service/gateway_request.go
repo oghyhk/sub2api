@@ -667,6 +667,105 @@ func EnsureToolUseIDs(body []byte) []byte {
 	return out
 }
 
+// EnsureGeminiFunctionCallIDs 修复 Gemini 格式请求中 functionCall / functionResponse
+// 缺失配对 id 的问题。当 OpenCode 等客户端以 Gemini 协议发送 Claude 模型请求时，
+// Google 的 Gemini→Anthropic 转换会将 functionCall 映射为 tool_use 块，
+// 但不会为 tool_use.id 生成值，导致上游返回
+// "messages.N.content.M.tool_use.id: Field required"。
+//
+// 修复策略：
+//   - 遍历 contents[*] 中的 parts[*]，识别 functionCall 和 functionResponse。
+//   - 为每个缺失 id 的 functionCall 生成 "toolu_<rand>"。
+//   - 按 FIFO 顺序将 functionResponse 的 tool_use_id 指向最近的未配对 functionCall id。
+//   - 此函数仅修改 Gemini JSON 体中的 contents，不影响 message-based 的 Anthropic
+//     体（后者由 EnsureToolUseIDs 处理）。
+func EnsureGeminiFunctionCallIDs(body []byte) []byte {
+	if !bytes.Contains(body, []byte(`"functionCall"`)) &&
+		!bytes.Contains(body, []byte(`"functionResponse"`)) {
+		return body
+	}
+
+	contents := gjson.GetBytes(body, "contents")
+	if !contents.Exists() || !contents.IsArray() {
+		return body
+	}
+
+	var contentsSlice []any
+	if err := json.Unmarshal(sliceRawFromBody(body, contents), &contentsSlice); err != nil {
+		return body
+	}
+
+	type pendingCall struct {
+		id       string
+		assigned bool
+	}
+	calls := make([]pendingCall, 0, 8)
+	modified := false
+
+	for _, turn := range contentsSlice {
+		turnMap, ok := turn.(map[string]any)
+		if !ok {
+			continue
+		}
+		parts, ok := turnMap["parts"].([]any)
+		if !ok {
+			continue
+		}
+		for _, part := range parts {
+			partMap, ok := part.(map[string]any)
+			if !ok {
+				continue
+			}
+
+			if fc, ok := partMap["functionCall"].(map[string]any); ok {
+				id, _ := fc["id"].(string)
+				if strings.TrimSpace(id) == "" {
+					newID := "toolu_" + randomHex(12)
+					fc["id"] = newID
+					calls = append(calls, pendingCall{id: newID, assigned: false})
+					modified = true
+				} else {
+					calls = append(calls, pendingCall{id: id, assigned: false})
+				}
+			}
+
+			if fr, ok := partMap["functionResponse"].(map[string]any); ok {
+				tuid, _ := fr["tool_use_id"].(string)
+				if strings.TrimSpace(tuid) != "" {
+					continue
+				}
+				matched := ""
+				for i := range calls {
+					if !calls[i].assigned {
+						calls[i].assigned = true
+						matched = calls[i].id
+						break
+					}
+				}
+				if matched == "" {
+					matched = "toolu_" + randomHex(12)
+				}
+				fr["tool_use_id"] = matched
+				modified = true
+			}
+		}
+	}
+
+	if !modified {
+		return body
+	}
+
+	contentsBytes, err := json.Marshal(contentsSlice)
+	if err != nil {
+		return body
+	}
+	out, err := sjson.SetRawBytes(body, "contents", contentsBytes)
+	if err != nil {
+		return body
+	}
+	return out
+}
+
 // FilterThinkingBlocks removes thinking blocks from request body
 // Returns filtered body or original body if filtering fails (fail-safe)
 // This prevents 400 errors from invalid thinking block signatures.

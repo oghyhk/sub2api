@@ -130,11 +130,13 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 		logger.LegacyPrintf("service.antigravity_gateway", "[Antigravity] Failed to clean schema: %v", err)
 	}
 
-	// 修复 Anthropic 格式请求中缺失的 tool_use.id / tool_result.tool_use_id。
-	// 当客户端通过 Gemini 协议端点发送 Claude 模型请求时，Google 的
-	// Gemini→Anthropic 转换可能会丢失 functionCall→tool_use 的 id 字段，
-	// 导致上游返回 "messages.N.content.M.tool_use.id: Field required"。
+	// 修复 Anthropic 格式或 Gemini 格式请求中缺失的工具调用 ID。
+	// 当客户端通过 Gemini 协议端点发送 Claude 模型请求时：
+	//   - Anthropic 格式体 (messages)：Google 的转换可能丢失 tool_use.id
+	//   - Gemini 格式体 (contents)：functionCall→tool_use 转换缺少 id 字段
+	// 两种路径都会导致上游返回 "messages.N.content.M.tool_use.id: Field required"。
 	injectedBody = EnsureToolUseIDs(injectedBody)
+	injectedBody = EnsureGeminiFunctionCallIDs(injectedBody)
 
 	// 包装请求
 	wrappedBody, err := s.wrapV1InternalRequest(projectID, mappedModel, injectedBody)

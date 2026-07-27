@@ -78,6 +78,11 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 	if c != nil {
 		c.Set("anthropic_passthrough", true)
 	}
+	// Pre-filter: ensure tool_use.id / tool_result.tool_use_id are present and paired,
+	// otherwise Anthropic returns "messages.N.content.M.tool_use.id: Field required".
+	// 必须在 StripEmptyTextBlocks / FilterWebSearchHistoryBlocks 之前执行：
+	// 后续过滤若改写 content 数组，会破坏这里建立的 id 配对关系。
+	input.Body = EnsureToolUseIDs(input.Body)
 	// Pre-filter: strip empty text blocks (including nested in tool_result) to prevent upstream 400.
 	input.Body = StripEmptyTextBlocks(input.Body)
 	// Pre-filter: strip web-search history blocks the upstream cannot accept

@@ -563,6 +563,110 @@ func StripEmptyTextBlocks(body []byte) []byte {
 	return out
 }
 
+// EnsureToolUseIDs repairs request bodies whose assistant turns contain tool_use
+// blocks with missing/empty id, or whose user turns contain tool_result blocks
+// with missing/empty tool_use_id. The Anthropic Messages API treats `id` and
+// `tool_use_id` as required fields and responds with
+// `messages.N.content.M.tool_use.id: Field required` when they are absent.
+//
+// 这种残缺请求通常来自上游转换路径（OpenAI/Gemini → Anthropic）或客户端 bug，
+// 这里做兜底修复而不是直接拒绝，避免打断多轮工具调用会话。
+//
+// 修复策略（保持调用配对一致）：
+//   - 顺序遍历 messages，为每个缺失 id 的 tool_use 生成新的 `toolu_<rand>` ID。
+//   - 同时收集所有已声明的 tool_use id（包括客户端本就提供的）。
+//   - 为每个缺失 tool_use_id 的 tool_result，按 FIFO 取下一个尚未配对的
+//     tool_use id 赋值，保证 tool_result ↔ tool_use 引用闭环。
+//   - 若 tool_result 出现时已没有未配对的 tool_use id，生成新的 `toolu_<rand>`，
+//     至少让请求通过字段非空校验。
+//
+// 未修改的 body 原样返回（包括解析失败时 fail-safe 不抛错）。
+func EnsureToolUseIDs(body []byte) []byte {
+	// Fast path: 没有 tool_use / tool_result 时直接返回，避免解析开销。
+	if !bytes.Contains(body, []byte(`"tool_use"`)) &&
+		!bytes.Contains(body, []byte(`"tool_result"`)) {
+		return body
+	}
+
+	msgsRes := gjson.GetBytes(body, "messages")
+	if !msgsRes.Exists() || !msgsRes.IsArray() {
+		return body
+	}
+
+	var messages []any
+	if err := json.Unmarshal(sliceRawFromBody(body, msgsRes), &messages); err != nil {
+		return body
+	}
+
+	type pendingUse struct {
+		id      string
+		assigned bool
+	}
+	uses := make([]pendingUse, 0, 8)
+	modified := false
+
+	for _, msg := range messages {
+		msgMap, ok := msg.(map[string]any)
+		if !ok {
+			continue
+		}
+		content, ok := msgMap["content"].([]any)
+		if !ok {
+			continue
+		}
+		for _, blk := range content {
+			blkMap, ok := blk.(map[string]any)
+			if !ok {
+				continue
+			}
+			switch bt, _ := blkMap["type"].(string); bt {
+			case "tool_use":
+				id, _ := blkMap["id"].(string)
+				if strings.TrimSpace(id) == "" {
+					newID := "toolu_" + randomHex(12)
+					blkMap["id"] = newID
+					uses = append(uses, pendingUse{id: newID, assigned: false})
+					modified = true
+				} else {
+					uses = append(uses, pendingUse{id: id, assigned: false})
+				}
+			case "tool_result":
+				tuid, _ := blkMap["tool_use_id"].(string)
+				if strings.TrimSpace(tuid) != "" {
+					continue
+				}
+				matched := ""
+				for i := range uses {
+					if !uses[i].assigned {
+						uses[i].assigned = true
+						matched = uses[i].id
+						break
+					}
+				}
+				if matched == "" {
+					matched = "toolu_" + randomHex(12)
+				}
+				blkMap["tool_use_id"] = matched
+				modified = true
+			}
+		}
+	}
+
+	if !modified {
+		return body
+	}
+
+	msgsBytes, err := json.Marshal(messages)
+	if err != nil {
+		return body
+	}
+	out, err := sjson.SetRawBytes(body, "messages", msgsBytes)
+	if err != nil {
+		return body
+	}
+	return out
+}
+
 // FilterThinkingBlocks removes thinking blocks from request body
 // Returns filtered body or original body if filtering fails (fail-safe)
 // This prevents 400 errors from invalid thinking block signatures.

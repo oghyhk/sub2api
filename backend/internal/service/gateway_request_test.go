@@ -622,6 +622,106 @@ func TestStripEmptyTextBlocks(t *testing.T) {
 	})
 }
 
+func TestEnsureToolUseIDs(t *testing.T) {
+	t.Run("no-op when no tool blocks", func(t *testing.T) {
+		input := []byte(`{"messages":[{"role":"user","content":[{"type":"text","text":"hi"}]}]}`)
+		out := EnsureToolUseIDs(input)
+		require.Equal(t, input, out)
+	})
+
+	t.Run("no-op when ids already present", func(t *testing.T) {
+		input := []byte(`{"messages":[
+			{"role":"assistant","content":[{"type":"tool_use","id":"toolu_abc","name":"Bash","input":{}}]},
+			{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_abc","content":"ok"}]}
+		]}`)
+		out := EnsureToolUseIDs(input)
+		require.Equal(t, input, out)
+	})
+
+	t.Run("fills missing tool_use id", func(t *testing.T) {
+		input := []byte(`{"messages":[
+			{"role":"assistant","content":[{"type":"tool_use","name":"Bash","input":{}}]}
+		]}`)
+		out := EnsureToolUseIDs(input)
+		id := gjson.GetBytes(out, "messages.0.content.0.id").String()
+		require.NotEmpty(t, id)
+		require.True(t, strings.HasPrefix(id, "toolu_"))
+	})
+
+	t.Run("fills empty tool_use id", func(t *testing.T) {
+		input := []byte(`{"messages":[
+			{"role":"assistant","content":[{"type":"tool_use","id":"","name":"Bash","input":{}}]}
+		]}`)
+		out := EnsureToolUseIDs(input)
+		id := gjson.GetBytes(out, "messages.0.content.0.id").String()
+		require.NotEmpty(t, id)
+		require.True(t, strings.HasPrefix(id, "toolu_"))
+	})
+
+	t.Run("pairs empty tool_result with preceding tool_use", func(t *testing.T) {
+		// 修复场景：客户端同时缺失 tool_use.id 和 tool_result.tool_use_id。
+		// 修复后两侧必须引用同一个生成的 id。
+		input := []byte(`{"messages":[
+			{"role":"user","content":[{"type":"text","text":"call bash"}]},
+			{"role":"assistant","content":[{"type":"tool_use","name":"Bash","input":{"command":"ls"}}]},
+			{"role":"user","content":[{"type":"tool_result","content":"ok"}]}
+		]}`)
+		out := EnsureToolUseIDs(input)
+		useID := gjson.GetBytes(out, "messages.1.content.0.id").String()
+		resID := gjson.GetBytes(out, "messages.2.content.0.tool_use_id").String()
+		require.NotEmpty(t, useID)
+		require.Equal(t, useID, resID, "tool_result must reference the generated tool_use id")
+	})
+
+	t.Run("pairs multiple empty results in order", func(t *testing.T) {
+		input := []byte(`{"messages":[
+			{"role":"assistant","content":[
+				{"type":"tool_use","name":"A","input":{}},
+				{"type":"tool_use","name":"B","input":{}}
+			]},
+			{"role":"user","content":[
+				{"type":"tool_result","content":"1"},
+				{"type":"tool_result","content":"2"}
+			]}
+		]}`)
+		out := EnsureToolUseIDs(input)
+		useA := gjson.GetBytes(out, "messages.0.content.0.id").String()
+		useB := gjson.GetBytes(out, "messages.0.content.1.id").String()
+		res1 := gjson.GetBytes(out, "messages.1.content.0.tool_use_id").String()
+		res2 := gjson.GetBytes(out, "messages.1.content.1.tool_use_id").String()
+		require.Equal(t, useA, res1, "first result pairs with first tool_use")
+		require.Equal(t, useB, res2, "second result pairs with second tool_use")
+		require.NotEqual(t, useA, useB, "two tool_use ids must be distinct")
+	})
+
+	t.Run("preserves explicit id and uses it for empty result", func(t *testing.T) {
+		// tool_use 已提供 id，但 tool_result 缺失 tool_use_id：修复后 tool_result 应引用现有 id。
+		input := []byte(`{"messages":[
+			{"role":"assistant","content":[{"type":"tool_use","id":"call_xyz","name":"Bash","input":{}}]},
+			{"role":"user","content":[{"type":"tool_result","content":"ok"}]}
+		]}`)
+		out := EnsureToolUseIDs(input)
+		require.Equal(t, "call_xyz", gjson.GetBytes(out, "messages.0.content.0.id").String())
+		require.Equal(t, "call_xyz", gjson.GetBytes(out, "messages.1.content.0.tool_use_id").String())
+	})
+
+	t.Run("ignores whitespace-only ids", func(t *testing.T) {
+		input := []byte(`{"messages":[
+			{"role":"assistant","content":[{"type":"tool_use","id":"   ","name":"Bash","input":{}}]}
+		]}`)
+		out := EnsureToolUseIDs(input)
+		id := gjson.GetBytes(out, "messages.0.content.0.id").String()
+		require.NotEmpty(t, id)
+		require.True(t, strings.HasPrefix(id, "toolu_"))
+	})
+
+	t.Run("invalid messages array returns body unchanged", func(t *testing.T) {
+		input := []byte(`{"messages":"not-an-array"}`)
+		out := EnsureToolUseIDs(input)
+		require.Equal(t, input, out)
+	})
+}
+
 func TestFilterThinkingBlocksForRetry_PreservesNonEmptyTextBlocks(t *testing.T) {
 	// Non-empty text blocks should pass through unchanged
 	input := []byte(`{

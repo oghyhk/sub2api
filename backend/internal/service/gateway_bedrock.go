@@ -27,6 +27,9 @@ func (s *GatewayService) ApplyBedrockCCCompat(c *gin.Context, body []byte, model
 	}
 	body = sanitizeBedrockCCFields(body)
 	body = sanitizeBedrockThinking(body, model)
+	// 先补齐缺失的 tool_use.id / tool_result.tool_use_id，再做字符清洗。
+	// 否则空 id 会原样透传到 Bedrock，触发 "tool_use.id: Field required"。
+	body = EnsureToolUseIDs(body)
 	body = sanitizeBedrockToolUseIDs(body)
 	body = sanitizeBedrockCCBetaTokens(body, model)
 	// 过滤 HTTP header 中的 anthropic-beta，只保留 Bedrock 支持的 token

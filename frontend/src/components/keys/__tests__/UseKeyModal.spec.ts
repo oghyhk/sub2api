@@ -52,8 +52,8 @@ describe('UseKeyModal', () => {
     expect(content).toContain('x-goog-api-key: sk-general-test')
     expect(content).toContain('/chat/completions')
     expect(content).toContain('/models/gemini-3.6-flash:generateContent')
-    expect(content).toContain('gpt-5.6-sol, gpt-5.6-terra, gpt-5.6-luna')
-    expect(content).toContain('gemini-3.1-pro, gemini-3.6-flash')
+    expect(content).toContain('claude-opus-4-6')
+    expect(content).toContain('gemini-3.6-flash')
 
     const instruction = wrapper.get('[data-testid="setup-instruction-content"]').text()
     expect(instruction).toContain('OpenAI-compatible: https://example.com/v1')
@@ -284,8 +284,8 @@ describe('UseKeyModal', () => {
     const configToml = codeBlocks.find((content) => content.includes('model_provider = "OpenAI"'))
 
     expect(configToml).toBeDefined()
-    expect(configToml).toContain('model = "gpt-5.6-sol"')
-    expect(configToml).toContain('review_model = "gpt-5.6-sol"')
+    expect(configToml).toContain('model = "gemini-3.6-flash"')
+    expect(configToml).toContain('review_model = "gemini-3.6-flash"')
     expect(configToml).not.toContain('gpt-5.5')
     expect(configToml).not.toContain('model_context_window')
     expect(configToml).not.toContain('model_auto_compact_token_limit')
@@ -328,7 +328,7 @@ describe('UseKeyModal', () => {
     let instruction = wrapper.get('[data-testid="setup-instruction-content"]').text()
     expect(instruction).toContain('https://example.com/v1')
     expect(instruction).toContain('sk-agent-handoff')
-    expect(instruction).toContain('gpt-5.6-sol, gpt-5.6-terra, gpt-5.6-luna')
+    expect(instruction).toContain('gemini-3.6-flash, claude-opus-4-6')
     expect(instruction).toContain('%USERPROFILE%\\.codex\\config.toml')
     expect(instruction).not.toContain('gpt-5.5')
 
@@ -556,18 +556,15 @@ describe('UseKeyModal', () => {
 
     const parsed = JSON.parse(wrapper.find('pre code').text())
     expect(Object.keys(parsed.provider.openai.models)).toEqual([
-      'gpt-5.6-sol',
-      'gpt-5.6-terra',
-      'gpt-5.6-luna'
+      'claude-opus-4-6'
     ])
     expect(Object.keys(parsed.provider['google-vps2'].models)).toEqual([
-      'gemini-3.1-pro',
       'gemini-3.6-flash'
     ])
     expect(parsed.provider.openai.options.baseURL).toBe('https://example.com/v1')
     expect(parsed.provider['google-vps2'].options.baseURL).toBe('https://example.com/antigravity/v1beta')
-    expect(parsed.model).toBe('openai/gpt-5.6-sol')
-    expect(parsed.small_model).toBe('openai/gpt-5.6-luna')
+    expect(parsed.model).toBe('openai/gemini-3.6-flash')
+    expect(parsed.small_model).toBe('openai/gemini-3.6-flash')
     for (const model of ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna']) {
       expect(parsed.provider.openai.models[model].limit.context).toBe(358000)
     }

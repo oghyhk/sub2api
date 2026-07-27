@@ -30,7 +30,7 @@ export function buildOpenAICurlExample(openAIBase: string, apiKey = 'YOUR_API_KE
   return `curl "${openAIBase}/chat/completions" \\
   -H "Authorization: Bearer ${apiKey}" \\
   -H "Content-Type: application/json" \\
-  -d '{"model":"gpt-5.6-luna","messages":[{"role":"user","content":"Reply with OK"}]}'`
+  -d '{"model":"gemini-3.6-flash","messages":[{"role":"user","content":"Reply with OK"}]}'`
 }
 
 export function buildNativeGeminiCurlExample(
@@ -48,7 +48,7 @@ export function buildOpenAIPowerShellExample(
   apiKey = 'YOUR_API_KEY',
 ): string {
   return `$headers = @{ Authorization = "Bearer ${apiKey}" }
-$body = @{ model = "gpt-5.6-luna"; messages = @(@{ role = "user"; content = "Reply with OK" }) } | ConvertTo-Json -Depth 5
+$body = @{ model = "gemini-3.6-flash"; messages = @(@{ role = "user"; content = "Reply with OK" }) } | ConvertTo-Json -Depth 5
 Invoke-RestMethod -Method Post -Uri "${openAIBase}/chat/completions" -Headers $headers -ContentType "application/json" -Body $body`
 }
 

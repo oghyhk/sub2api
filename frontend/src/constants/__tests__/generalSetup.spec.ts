@@ -21,7 +21,7 @@ describe('general setup guide', () => {
     const publicGuide = readFileSync(resolve(currentDir, '../../../public/docs/setup.md'), 'utf8')
 
     expect(publicGuide.trim()).toBe(buildGeneralSetupMarkdown('https://api.k2598.com').trim())
-    expect(publicGuide).toContain('gpt-5.6-sol')
+    expect(publicGuide).toContain('claude-opus-4-6')
     expect(publicGuide).toContain('gemini-3.6-flash')
     expect(publicGuide).toContain('Authorization: Bearer YOUR_API_KEY')
     expect(publicGuide).toContain('x-goog-api-key: YOUR_API_KEY')

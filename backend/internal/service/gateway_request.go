@@ -667,21 +667,16 @@ func EnsureToolUseIDs(body []byte) []byte {
 	return out
 }
 
-// EnsureGeminiFunctionCallIDs 修复 Gemini 格式请求中 functionCall / functionResponse
-// 缺失配对 id 的问题。当 OpenCode 等客户端以 Gemini 协议发送 Claude 模型请求时，
-// Google 的 Gemini→Anthropic 转换会将 functionCall 映射为 tool_use 块，
-// 但不会为 tool_use.id 生成值，导致上游返回
+// EnsureGeminiFunctionCallIDs 为 Gemini 格式请求中的 functionCall 注入 id 字段。
+// Gemini 的 functionCall 对象不包含 id，但 Google 的内部 Gemini→Anthropic
+// 转换会将其映射为 tool_use 块。若转换未生成 id，Claude 上游会返回
 // "messages.N.content.M.tool_use.id: Field required"。
 //
-// 修复策略：
-//   - 遍历 contents[*] 中的 parts[*]，识别 functionCall 和 functionResponse。
-//   - 为每个缺失 id 的 functionCall 生成 "toolu_<rand>"。
-//   - 按 FIFO 顺序将 functionResponse 的 tool_use_id 指向最近的未配对 functionCall id。
-//   - 此函数仅修改 Gemini JSON 体中的 contents，不影响 message-based 的 Anthropic
-//     体（后者由 EnsureToolUseIDs 处理）。
+// 此函数仅注入 id 到 functionCall，不修改 functionResponse（Google 会拒绝
+// functionResponse 上的未知字段如 tool_use_id）。Google 的配对逻辑依赖顺序而非 id，
+// 因此仅修复 functionCall.id 即可让上下游正确关联 tool_use ↔ tool_result。
 func EnsureGeminiFunctionCallIDs(body []byte) []byte {
-	if !bytes.Contains(body, []byte(`"functionCall"`)) &&
-		!bytes.Contains(body, []byte(`"functionResponse"`)) {
+	if !bytes.Contains(body, []byte(`"functionCall"`)) {
 		return body
 	}
 
@@ -695,11 +690,6 @@ func EnsureGeminiFunctionCallIDs(body []byte) []byte {
 		return body
 	}
 
-	type pendingCall struct {
-		id       string
-		assigned bool
-	}
-	calls := make([]pendingCall, 0, 8)
 	modified := false
 
 	for _, turn := range contentsSlice {
@@ -720,33 +710,9 @@ func EnsureGeminiFunctionCallIDs(body []byte) []byte {
 			if fc, ok := partMap["functionCall"].(map[string]any); ok {
 				id, _ := fc["id"].(string)
 				if strings.TrimSpace(id) == "" {
-					newID := "toolu_" + randomHex(12)
-					fc["id"] = newID
-					calls = append(calls, pendingCall{id: newID, assigned: false})
+					fc["id"] = "toolu_" + randomHex(12)
 					modified = true
-				} else {
-					calls = append(calls, pendingCall{id: id, assigned: false})
 				}
-			}
-
-			if fr, ok := partMap["functionResponse"].(map[string]any); ok {
-				tuid, _ := fr["tool_use_id"].(string)
-				if strings.TrimSpace(tuid) != "" {
-					continue
-				}
-				matched := ""
-				for i := range calls {
-					if !calls[i].assigned {
-						calls[i].assigned = true
-						matched = calls[i].id
-						break
-					}
-				}
-				if matched == "" {
-					matched = "toolu_" + randomHex(12)
-				}
-				fr["tool_use_id"] = matched
-				modified = true
 			}
 		}
 	}
@@ -764,6 +730,222 @@ func EnsureGeminiFunctionCallIDs(body []byte) []byte {
 		return body
 	}
 	return out
+}
+
+// ConvertGeminiToAnthropicBody converts a Gemini-format request body (contents)
+// to Anthropic Messages API format (messages). Called before forwarding Claude
+// model requests through the antigravity Gemini gateway to bypass Google's
+// internal Gemini→Anthropic conversion which drops tool_use.id fields.
+//
+// Handles:
+//   - contents[*] → messages[*] (role mapping, part-to-block conversion)
+//   - functionCall → tool_use (id synthesized via toolu_<rand>)
+//   - functionResponse → tool_result (tool_use_id FIFO-paired with preceding functionCall)
+//   - text parts → text blocks (preserving thought_signature if present)
+//   - inlineData parts → image blocks
+//   - systemInstruction → system
+//   - generationConfig → max_tokens, temperature, top_p, top_k
+//   - tools (Gemini functionDeclarations) → tools (Anthropic format)
+//   - toolConfig → tool_choice
+func ConvertGeminiToAnthropicBody(body []byte) []byte {
+	contents := gjson.GetBytes(body, "contents")
+	if !contents.Exists() || !contents.IsArray() {
+		return body
+	}
+
+	var contentsSlice []any
+	if err := json.Unmarshal(sliceRawFromBody(body, contents), &contentsSlice); err != nil {
+		return body
+	}
+
+	type pendingCall struct {
+		id       string
+		assigned bool
+	}
+	calls := make([]pendingCall, 0, 8)
+	messages := make([]any, 0, len(contentsSlice))
+	modified := false
+
+	for _, turn := range contentsSlice {
+		turnMap, ok := turn.(map[string]any)
+		if !ok {
+			messages = append(messages, turn)
+			continue
+		}
+		role, _ := turnMap["role"].(string)
+		if role == "model" {
+			role = "assistant"
+		}
+
+		parts, ok := turnMap["parts"].([]any)
+		if !ok {
+			turnMap["role"] = role
+			messages = append(messages, turnMap)
+			continue
+		}
+
+		content := make([]any, 0, len(parts))
+		for _, part := range parts {
+			partMap, ok := part.(map[string]any)
+			if !ok {
+				content = append(content, part)
+				continue
+			}
+
+			if fc, ok := partMap["functionCall"].(map[string]any); ok {
+				modified = true
+				name, _ := fc["name"].(string)
+				args, _ := fc["args"]
+				id, _ := fc["id"].(string)
+				if strings.TrimSpace(id) == "" {
+					id = "toolu_" + randomHex(12)
+				}
+				tb := map[string]any{
+					"type":  "tool_use",
+					"id":    id,
+					"name":  name,
+					"input": args,
+				}
+				if args == nil {
+					tb["input"] = map[string]any{}
+				}
+				calls = append(calls, pendingCall{id: id, assigned: false})
+				content = append(content, tb)
+				continue
+			}
+
+			if fr, ok := partMap["functionResponse"].(map[string]any); ok {
+				modified = true
+				response, _ := fr["response"]
+				resultContent := convertGeminiFunctionResponseToContent(response)
+				matched := ""
+				for i := range calls {
+					if !calls[i].assigned {
+						calls[i].assigned = true
+						matched = calls[i].id
+						break
+					}
+				}
+				if matched == "" {
+					matched = "toolu_" + randomHex(12)
+				}
+				tr := map[string]any{
+					"type":         "tool_result",
+					"tool_use_id":  matched,
+					"content":      resultContent,
+				}
+				content = append(content, tr)
+				continue
+			}
+
+			if text, ok := partMap["text"].(string); ok {
+				tb := map[string]any{"type": "text", "text": text}
+				content = append(content, tb)
+				continue
+			}
+
+			if idata, ok := partMap["inlineData"].(map[string]any); ok {
+				img := map[string]any{"type": "image", "source": map[string]any{
+					"type":       "base64",
+					"media_type": idata["mimeType"],
+					"data":       idata["data"],
+				}}
+				content = append(content, img)
+				modified = true
+				continue
+			}
+
+			content = append(content, part)
+		}
+
+		msg := map[string]any{
+			"role":    role,
+			"content": content,
+		}
+		messages = append(messages, msg)
+	}
+
+	if !modified {
+		return body
+	}
+
+	msgsBytes, err := json.Marshal(messages)
+	if err != nil {
+		return body
+	}
+	out, err := sjson.SetRawBytes(body, "messages", msgsBytes)
+	if err != nil {
+		return body
+	}
+	out, _ = sjson.DeleteBytes(out, "contents")
+
+	// Convert systemInstruction → system
+	if si := gjson.GetBytes(out, "systemInstruction"); si.Exists() {
+		parts := si.Get("parts")
+		if parts.IsArray() {
+			sysTexts := make([]string, 0)
+			parts.ForEach(func(_, p gjson.Result) bool {
+				if t := p.Get("text").String(); t != "" {
+					sysTexts = append(sysTexts, t)
+				}
+				return true
+			})
+			if len(sysTexts) > 0 {
+				sys := make([]any, len(sysTexts))
+				for i, t := range sysTexts {
+					sys[i] = map[string]any{"type": "text", "text": t}
+				}
+				sysBytes, _ := json.Marshal(sys)
+				out, _ = sjson.SetRawBytes(out, "system", sysBytes)
+			}
+		}
+		out, _ = sjson.DeleteBytes(out, "systemInstruction")
+	}
+
+	// Convert generationConfig
+	if gc := gjson.GetBytes(out, "generationConfig"); gc.Exists() {
+		if mt := gc.Get("maxOutputTokens"); mt.Exists() && !gjson.GetBytes(out, "max_tokens").Exists() {
+			out, _ = sjson.SetBytes(out, "max_tokens", mt.Int())
+		}
+		if temp := gc.Get("temperature"); temp.Exists() && !gjson.GetBytes(out, "temperature").Exists() {
+			out, _ = sjson.SetBytes(out, "temperature", temp.Float())
+		}
+		if tp := gc.Get("topP"); tp.Exists() && !gjson.GetBytes(out, "top_p").Exists() {
+			out, _ = sjson.SetBytes(out, "top_p", tp.Float())
+		}
+		if tk := gc.Get("topK"); tk.Exists() && !gjson.GetBytes(out, "top_k").Exists() {
+			out, _ = sjson.SetBytes(out, "top_k", tk.Int())
+		}
+		out, _ = sjson.DeleteBytes(out, "generationConfig")
+	}
+
+	return out
+}
+
+func convertGeminiFunctionResponseToContent(response any) []any {
+	if response == nil {
+		return []any{map[string]any{"type": "text", "text": ""}}
+	}
+	switch v := response.(type) {
+	case string:
+		return []any{map[string]any{"type": "text", "text": v}}
+	case map[string]any:
+		if txt, ok := v["text"].(string); ok {
+			return []any{map[string]any{"type": "text", "text": txt}}
+		}
+		if output, ok := v["output"]; ok {
+			if s, ok := output.(string); ok {
+				return []any{map[string]any{"type": "text", "text": s}}
+			}
+		}
+		b, _ := json.Marshal(v)
+		return []any{map[string]any{"type": "text", "text": string(b)}}
+	case []any:
+		return v
+	default:
+		b, _ := json.Marshal(v)
+		return []any{map[string]any{"type": "text", "text": string(b)}}
+	}
 }
 
 // FilterThinkingBlocks removes thinking blocks from request body

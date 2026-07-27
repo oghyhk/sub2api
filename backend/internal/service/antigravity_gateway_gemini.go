@@ -132,9 +132,12 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 
 	// 修复 Anthropic 格式或 Gemini 格式请求中缺失的工具调用 ID。
 	// 当客户端通过 Gemini 协议端点发送 Claude 模型请求时：
-	//   - Anthropic 格式体 (messages)：Google 的转换可能丢失 tool_use.id
-	//   - Gemini 格式体 (contents)：functionCall→tool_use 转换缺少 id 字段
+	//   - Anthropic 格式 (messages)：Google 的转换可能丢失 tool_use.id
+	//   - Gemini 格式 (contents)：functionCall→tool_use 转换缺少 id 字段
 	// 两种路径都会导致上游返回 "messages.N.content.M.tool_use.id: Field required"。
+	// 注意：Gemini 端点不接受 functionResponse 中的 tool_use_id 扩展字段，
+	// 因此仅在 functionCall 上注入 id（Google 的转换会将其映射为 tool_use.id，
+	// 并按顺序配对 tool_result.tool_use_id）。
 	injectedBody = EnsureToolUseIDs(injectedBody)
 	injectedBody = EnsureGeminiFunctionCallIDs(injectedBody)
 

@@ -739,30 +739,27 @@ func TestEnsureGeminiFunctionCallIDs(t *testing.T) {
 		require.True(t, strings.HasPrefix(id, "toolu_"))
 	})
 
-	t.Run("pairs functionResponse with functionCall", func(t *testing.T) {
+	t.Run("does not modify functionResponse", func(t *testing.T) {
 		input := []byte(`{"contents":[
-			{"role":"user","parts":[{"text":"run bash"}]},
-			{"role":"model","parts":[
-				{"functionCall":{"name":"Bash","args":{"command":"ls"}}}
-			]},
+			{"role":"model","parts":[{"functionCall":{"name":"Bash","args":{}}}]},
 			{"role":"user","parts":[
 				{"functionResponse":{"name":"Bash","response":{"output":"ok"}}}
 			]}
 		]}`)
 		out := EnsureGeminiFunctionCallIDs(input)
-		fcID := gjson.GetBytes(out, "contents.1.parts.0.functionCall.id").String()
-		frID := gjson.GetBytes(out, "contents.2.parts.0.functionResponse.tool_use_id").String()
+		// functionCall gets id
+		fcID := gjson.GetBytes(out, "contents.0.parts.0.functionCall.id").String()
 		require.NotEmpty(t, fcID)
-		require.Equal(t, fcID, frID, "functionResponse must reference functionCall id")
+		require.True(t, strings.HasPrefix(fcID, "toolu_"))
+		// functionResponse is NOT modified (no tool_use_id)
+		frID := gjson.GetBytes(out, "contents.1.parts.0.functionResponse.tool_use_id")
+		require.False(t, frID.Exists(), "functionResponse must not get tool_use_id")
 	})
 
 	t.Run("no-op when ids already present", func(t *testing.T) {
 		input := []byte(`{"contents":[
 			{"role":"model","parts":[
 				{"functionCall":{"name":"Bash","id":"toolu_abc","args":{}}}
-			]},
-			{"role":"user","parts":[
-				{"functionResponse":{"name":"Bash","tool_use_id":"toolu_abc","response":{"ok":true}}}
 			]}
 		]}`)
 		out := EnsureGeminiFunctionCallIDs(input)

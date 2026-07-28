@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 )
 
 // ModelAvailabilityDiagnosis describes whether the requested model can be
@@ -69,7 +70,7 @@ func (s *GatewayService) DiagnoseModelAvailabilityForPlatform(
 		return ModelAvailabilityDiagnosis{HasAccountsInPool: true, HasModelSupport: true}
 	}
 
-	useMixed := platform == PlatformAnthropic || platform == PlatformGemini || platform == PlatformOpenAI
+	useMixed := platform == PlatformAnthropic || platform == PlatformGemini || domain.DefaultAntigravityModelMapping[requestedModel] != ""
 	platforms := []string{platform}
 	if useMixed {
 		platforms = append(platforms, PlatformAntigravity)

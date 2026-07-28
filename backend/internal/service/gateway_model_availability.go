@@ -69,7 +69,7 @@ func (s *GatewayService) DiagnoseModelAvailabilityForPlatform(
 		return ModelAvailabilityDiagnosis{HasAccountsInPool: true, HasModelSupport: true}
 	}
 
-	useMixed := platform == PlatformAnthropic || platform == PlatformGemini
+	useMixed := platform == PlatformAnthropic || platform == PlatformGemini || platform == PlatformOpenAI
 	platforms := []string{platform}
 	if useMixed {
 		platforms = append(platforms, PlatformAntigravity)

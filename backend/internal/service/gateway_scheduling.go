@@ -61,7 +61,7 @@ func (s *GatewayService) SelectAccountForModelWithExclusions(ctx context.Context
 
 	// anthropic/gemini 分组支持混合调度（包含启用了 mixed_scheduling 的 antigravity 账户）
 	// 注意：强制平台模式不走混合调度
-	if (platform == PlatformAnthropic || platform == PlatformGemini) && !hasForcePlatform {
+	if (platform == PlatformAnthropic || platform == PlatformGemini || platform == PlatformOpenAI) && !hasForcePlatform {
 		account, err := s.selectAccountWithMixedScheduling(ctx, groupID, sessionHash, requestedModel, excludedIDs, platform)
 		if err != nil {
 			return nil, err
@@ -975,7 +975,7 @@ func (s *GatewayService) listSchedulableAccounts(ctx context.Context, groupID *i
 		}
 		return accounts, useMixed, err
 	}
-	useMixed := (platform == PlatformAnthropic || platform == PlatformGemini) && !hasForcePlatform
+	useMixed := (platform == PlatformAnthropic || platform == PlatformGemini || platform == PlatformOpenAI) && !hasForcePlatform
 	if useMixed {
 		platforms := []string{platform, PlatformAntigravity}
 		var accounts []Account

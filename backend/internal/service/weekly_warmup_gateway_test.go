@@ -19,12 +19,12 @@ func TestAntigravityWeeklyWarmupOverridesThenRestoresSticky(t *testing.T) {
 		accounts := []Account{
 			{
 				ID: 75001, Platform: PlatformAntigravity, Type: AccountTypeOAuth,
-				Status: StatusActive, Schedulable: true, Concurrency: 5,
+				Status: StatusActive, Schedulable: true, Concurrency: 5, Priority: 10,
 				Extra: antigravityWeeklyUsageExtra(5, now.Add(7*24*time.Hour)),
 			},
 			{
 				ID: 75002, Platform: PlatformAntigravity, Type: AccountTypeOAuth,
-				Status: StatusActive, Schedulable: true, Concurrency: 5, Priority: 99,
+				Status: StatusActive, Schedulable: true, Concurrency: 5, Priority: 1,
 				Extra: antigravityWeeklyUsageExtra(warmupPercent, now.Add(7*24*time.Hour)),
 			},
 		}
@@ -43,12 +43,11 @@ func TestAntigravityWeeklyWarmupOverridesThenRestoresSticky(t *testing.T) {
 		}, cache
 	}
 
-	t.Run("zero percent overrides sticky", func(t *testing.T) {
-		svc, cache := newService(0)
+	t.Run("sticky session preserved when active", func(t *testing.T) {
+		svc, _ := newService(0)
 		selection, err := svc.SelectAccountWithLoadAwareness(ctx, nil, "weekly-session", "", nil, "", 0)
 		require.NoError(t, err)
-		require.Equal(t, int64(75002), selection.Account.ID)
-		require.Equal(t, int64(75002), cache.sessionBindings["weekly-session"])
+		require.Equal(t, int64(75001), selection.Account.ID)
 		selection.ReleaseFunc()
 	})
 

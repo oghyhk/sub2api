@@ -105,6 +105,9 @@ var DefaultAntigravityModelMapping = map[string]string{
 	// Gemini 3 preview 映射
 	"gemini-3-flash-preview": "gemini-3-flash",
 	"gemini-3-pro-preview":   "gemini-3-pro-high",
+	// Gemini 3.6 白名单
+	"gemini-3.6-flash":      "gemini-3.6-flash-high",
+	"gemini-3.6-flash-high": "gemini-3.6-flash-high",
 	// Gemini 3.1 白名单
 	AntigravityGemini31ProAgentModel: AntigravityGemini31ProAgentModel,
 	"gemini-3.1-pro":                 AntigravityGemini31ProAgentModel,

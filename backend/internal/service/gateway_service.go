@@ -854,7 +854,7 @@ func (s *GatewayService) GenerateSessionHash(parsed *ParsedRequest) string {
 		_, _ = combined.WriteString(systemText)
 	}
 	contentStart := combined.Len()
-	appendFirstNMessageTextsFromRaw(&combined, parsed.MessagesRaw(), sessionHashFallbackMaxMessages)
+	appendMessageTextsFromRaw(&combined, parsed.MessagesRaw())
 	if combined.Len() == contentStart {
 		appendResponsesSessionAnchorFromRaw(&combined, parsed.InputRaw())
 	}
@@ -938,12 +938,6 @@ func (s *GatewayService) extractCacheableContent(parsed *ParsedRequest) string {
 	}
 	if systemText != "" {
 		return systemText
-	}
-
-	// 如果没有 cache_control 标记，但有系统提示词，使用系统提示词作为粘性会话的基础
-	// 这样可以保证相同 system prompt 的对话被路由到同一个账号，最大化缓存命中率
-	if rawSystem := parsed.SystemRaw(); len(rawSystem) > 0 {
-		return string(rawSystem)
 	}
 
 	return ""

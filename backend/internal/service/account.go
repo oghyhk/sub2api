@@ -604,9 +604,12 @@ func (a *Account) resolveModelMapping(rawMapping map[string]any) map[string]stri
 	if len(result) > 0 {
 		if a.Platform == domain.PlatformAntigravity {
 			ensureAntigravityDefaultPassthroughs(result, []string{
+				"gemini-3-flash",
 				"gemini-3.6-flash",
-				"claude-opus-4-6",
+				"gemini-3.1-pro-high",
+				"gemini-3.1-pro-low",
 			})
+			applyAntigravityGemini31ProAliases(result)
 		}
 		return result
 	}

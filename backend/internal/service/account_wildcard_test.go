@@ -497,17 +497,20 @@ func TestAccountGetModelMapping_AntigravityEnsuresGeminiDefaultPassthroughs(t *t
 		Platform: PlatformAntigravity,
 		Credentials: map[string]any{
 			"model_mapping": map[string]any{
-				"claude-opus-4-6": "claude-opus-4-6-thinking",
+				"gemini-3-pro-high": "gemini-3.1-pro-high",
 			},
 		},
 	}
 
 	mapping := account.GetModelMapping()
+	if mapping["gemini-3-flash"] != "gemini-3-flash" {
+		t.Fatalf("expected gemini-3-flash passthrough to be auto-filled, got: %q", mapping["gemini-3-flash"])
+	}
 	if mapping["gemini-3.6-flash"] != "gemini-3.6-flash" {
 		t.Fatalf("expected gemini-3.6-flash passthrough to be auto-filled, got: %q", mapping["gemini-3.6-flash"])
 	}
-	if mapping["claude-opus-4-6"] != "claude-opus-4-6-thinking" {
-		t.Fatalf("expected claude-opus-4-6 to be mapped, got: %q", mapping["claude-opus-4-6"])
+	if mapping["gemini-3.1-pro-high"] != "gemini-3.1-pro-high" {
+		t.Fatalf("expected gemini-3.1-pro-high passthrough to be auto-filled, got: %q", mapping["gemini-3.1-pro-high"])
 	}
 }
 

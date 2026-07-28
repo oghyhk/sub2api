@@ -10,6 +10,8 @@ func TestDefaultAntigravityModelMapping_ContainsOpusAndGemini36Flash(t *testing.
 		"claude-opus-4-6-thinking": "claude-opus-4-6-thinking",
 		"gemini-3.6-flash":         "gemini-3.6-flash-high",
 		"gemini-3.6-flash-high":    "gemini-3.6-flash-high",
+		"claude-sonnet-4-5":        "claude-sonnet-4-5",
+		"gemini-3-flash":           "gemini-3-flash",
 	}
 
 	for from, want := range cases {

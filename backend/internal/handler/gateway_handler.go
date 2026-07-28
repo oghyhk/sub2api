@@ -1176,7 +1176,7 @@ func writeOpenAIModelsList(c *gin.Context, modelIDs []string) {
 }
 
 func customModelsListSource(platform string, availableModels, fallbackModels []string) []string {
-	if platform == service.PlatformAnthropic && len(availableModels) > 0 {
+	if (platform == service.PlatformAnthropic || platform == service.PlatformOpenAI) && len(availableModels) > 0 {
 		return mergeModelIDs(availableModels, fallbackModels)
 	}
 	return availableModels
@@ -1236,10 +1236,7 @@ func customModelsListAllowsModel(availablePatterns []string, model string) bool 
 func defaultModelIDsForPlatform(platform string) []string {
 	switch platform {
 	case service.PlatformOpenAI:
-		ids := make([]string, 0, len(openai.DefaultModels)+len(antigravity.DefaultModels()))
-		for _, model := range openai.DefaultModels {
-			ids = append(ids, model.ID)
-		}
+		ids := append([]string(nil), openai.DefaultModelIDs()...)
 		for _, model := range antigravity.DefaultModels() {
 			ids = append(ids, model.ID)
 		}

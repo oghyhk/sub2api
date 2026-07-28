@@ -238,7 +238,7 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 			forwardBody = h.gatewayService.ReplaceModelInBody(body, channelMapping.MappedModel)
 		}
 		var result *service.ForwardResult
-		if account.Platform == service.PlatformGemini {
+		if account.Platform == service.PlatformGemini || account.Platform == service.PlatformAntigravity {
 			if h.geminiCompatService == nil {
 				h.chatCompletionsErrorResponse(c, http.StatusBadGateway, "upstream_error", "Gemini compatibility service is not configured")
 				if accountReleaseFunc != nil {

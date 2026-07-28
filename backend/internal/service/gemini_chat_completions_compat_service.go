@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"time"
 
@@ -93,6 +94,19 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 		return nil, s.writeChatCompletionsError(c, http.StatusBadRequest, "invalid_request_error", err.Error())
 	}
 	geminiReq = ensureGeminiFunctionCallThoughtSignatures(geminiReq)
+	if account.Platform == PlatformAntigravity {
+		return s.forwardAntigravityAsChatCompletions(
+			ctx,
+			c,
+			account,
+			geminiReq,
+			originalModel,
+			clientStream,
+			includeUsage,
+			startTime,
+			originalChatBody,
+		)
+	}
 
 	proxyURL := ""
 	if account.ProxyID != nil && account.Proxy != nil {
@@ -290,6 +304,96 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 		ImageSize:        imageSize,
 		ImageInputSize:   imageInputSize,
 		ClientDisconnect: false,
+	}, nil
+}
+
+func (s *GeminiMessagesCompatService) forwardAntigravityAsChatCompletions(
+	ctx context.Context,
+	c *gin.Context,
+	account *Account,
+	geminiReq []byte,
+	originalModel string,
+	clientStream bool,
+	includeUsage bool,
+	startTime time.Time,
+	originalChatBody []byte,
+) (*ForwardResult, error) {
+	if s.antigravityGatewayService == nil {
+		return nil, s.writeChatCompletionsError(c, http.StatusBadGateway, "upstream_error", "Antigravity gateway service is not configured")
+	}
+
+	recorder := httptest.NewRecorder()
+	captureBase, _ := gin.CreateTestContext(recorder)
+	captureCtx := c.Copy()
+	captureCtx.Writer = captureBase.Writer
+
+	antigravityResult, err := s.antigravityGatewayService.ForwardGemini(
+		ctx,
+		captureCtx,
+		account,
+		originalModel,
+		"streamGenerateContent",
+		clientStream,
+		geminiReq,
+		false,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &http.Response{
+		StatusCode: recorder.Code,
+		Header:     recorder.Header().Clone(),
+		Body:       io.NopCloser(bytes.NewReader(recorder.Body.Bytes())),
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	var usage *ClaudeUsage
+	var firstTokenMs *int
+	if clientStream {
+		streamResult, streamErr := s.handleChatCompletionsStreamingResponseFromGemini(
+			c,
+			resp,
+			startTime,
+			originalModel,
+			false,
+			includeUsage,
+		)
+		if streamErr != nil {
+			return nil, streamErr
+		}
+		usage = streamResult.usage
+		firstTokenMs = streamResult.firstTokenMs
+	} else {
+		var convertErr error
+		usage, convertErr = s.handleChatCompletionsNonStreamingResponseFromGemini(c, resp, originalModel, false)
+		if convertErr != nil {
+			return nil, convertErr
+		}
+	}
+	if usage == nil && antigravityResult != nil {
+		usage = &antigravityResult.Usage
+	}
+	if usage == nil {
+		usage = &ClaudeUsage{}
+	}
+	if antigravityResult == nil {
+		return nil, s.writeChatCompletionsError(c, http.StatusBadGateway, "upstream_error", "Antigravity returned no result")
+	}
+
+	mappedModel := mapAntigravityModel(account, originalModel)
+	reasoningEffort := extractCCReasoningEffortFromBody(originalChatBody)
+	reasoningEffort = ApplyThinkingEnabledFallback(reasoningEffort, originalChatBody, mappedModel)
+
+	return &ForwardResult{
+		RequestID:       antigravityResult.RequestID,
+		Usage:           *usage,
+		Model:           originalModel,
+		UpstreamModel:   mappedModel,
+		Stream:          clientStream,
+		Duration:        time.Since(startTime),
+		FirstTokenMs:    firstTokenMs,
+		ReasoningEffort: reasoningEffort,
 	}, nil
 }
 

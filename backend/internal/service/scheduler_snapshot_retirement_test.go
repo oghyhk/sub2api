@@ -261,3 +261,50 @@ func TestSchedulerFallbackReturnsDBAccountsWhenBucketRetired(t *testing.T) {
 	require.Zero(t, setAttempts)
 	require.Zero(t, published)
 }
+
+func TestSchedulerOpenAIAntigravityModelUsesIsolatedMixedBucket(t *testing.T) {
+	groupID := int64(64)
+	cache := newRetirementRaceCache()
+	repo := &mockAccountRepoForPlatform{
+		accounts: []Account{
+			{ID: 6401, Platform: PlatformOpenAI, Status: StatusActive, Schedulable: true},
+			{
+				ID:          6402,
+				Platform:    PlatformAntigravity,
+				Status:      StatusActive,
+				Schedulable: true,
+				Extra:       map[string]any{"mixed_scheduling": true},
+			},
+		},
+	}
+	svc := NewSchedulerSnapshotService(cache, nil, repo, nil, &config.Config{
+		RunMode: config.RunModeStandard,
+		Gateway: config.GatewayConfig{Scheduling: config.GatewaySchedulingConfig{
+			DbFallbackEnabled: true,
+		}},
+	})
+
+	accounts, useMixed, err := svc.ListSchedulableAccounts(
+		context.Background(),
+		&groupID,
+		PlatformOpenAI,
+		false,
+		"gemini-3.6-flash",
+	)
+	require.NoError(t, err)
+	require.True(t, useMixed)
+	require.Len(t, accounts, 2)
+
+	cache.mu.Lock()
+	require.Contains(t, cache.captures, SchedulerBucket{
+		GroupID:  groupID,
+		Platform: PlatformOpenAI,
+		Mode:     SchedulerModeMixed,
+	})
+	require.NotContains(t, cache.captures, SchedulerBucket{
+		GroupID:  groupID,
+		Platform: PlatformOpenAI,
+		Mode:     SchedulerModeSingle,
+	})
+	cache.mu.Unlock()
+}

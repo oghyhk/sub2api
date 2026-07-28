@@ -215,6 +215,9 @@ func (s *SchedulerSnapshotService) ListSchedulableAccounts(ctx context.Context, 
 	}
 	useMixed := (platform == PlatformAnthropic || platform == PlatformGemini || (reqModel != "" && domain.DefaultAntigravityModelMapping[reqModel] != "")) && !hasForcePlatform
 	mode := s.resolveMode(platform, hasForcePlatform)
+	if useMixed {
+		mode = SchedulerModeMixed
+	}
 	bucket := s.bucketFor(groupID, platform, mode)
 	var writeToken SchedulerBucketWriteToken
 	canPublish := false

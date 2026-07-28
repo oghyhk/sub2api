@@ -2,6 +2,7 @@ package routes
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -68,6 +69,42 @@ func TestGatewayRoutesOpenAIResponsesCompactPathIsRegistered(t *testing.T) {
 
 		router.ServeHTTP(w, req)
 		require.NotEqual(t, http.StatusNotFound, w.Code, "path=%s should hit OpenAI responses handler", path)
+	}
+}
+
+func TestIsAntigravityChatCompletionsRequestReplaysBody(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want bool
+	}{
+		{
+			name: "antigravity model",
+			body: `{"model":"gemini-3.6-flash","messages":[{"role":"user","content":"hello"}]}`,
+			want: true,
+		},
+		{
+			name: "openai model",
+			body: `{"model":"gpt-5.6-sol","messages":[{"role":"user","content":"hello"}]}`,
+			want: false,
+		},
+		{
+			name: "invalid json",
+			body: `{"model":`,
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c, _ := gin.CreateTestContext(httptest.NewRecorder())
+			c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(tt.body))
+
+			require.Equal(t, tt.want, isAntigravityChatCompletionsRequest(c))
+			replayed, err := io.ReadAll(c.Request.Body)
+			require.NoError(t, err)
+			require.Equal(t, tt.body, string(replayed))
+		})
 	}
 }
 

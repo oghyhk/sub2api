@@ -1,15 +1,48 @@
 package routes
 
 import (
+	"bytes"
+	"encoding/json"
+	"io"
 	"net/http"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
+
+type replayRequestBody struct {
+	io.Reader
+	io.Closer
+}
+
+func isAntigravityChatCompletionsRequest(c *gin.Context) bool {
+	if c == nil || c.Request == nil || c.Request.Body == nil {
+		return false
+	}
+
+	originalBody := c.Request.Body
+	var consumed bytes.Buffer
+	decoder := json.NewDecoder(io.TeeReader(originalBody, &consumed))
+	var request struct {
+		Model string `json:"model"`
+	}
+	err := decoder.Decode(&request)
+	c.Request.Body = replayRequestBody{
+		Reader: io.MultiReader(bytes.NewReader(consumed.Bytes()), originalBody),
+		Closer: originalBody,
+	}
+	if err != nil {
+		return false
+	}
+
+	_, ok := domain.DefaultAntigravityModelMapping[request.Model]
+	return ok
+}
 
 // RegisterGatewayRoutes 注册 API 网关路由（Claude/OpenAI/Gemini 兼容）
 func RegisterGatewayRoutes(
@@ -178,7 +211,8 @@ func RegisterGatewayRoutes(
 		})
 		// OpenAI Chat Completions API: auto-route based on group platform
 		gateway.POST("/chat/completions", func(c *gin.Context) {
-			if isOpenAIResponsesCompatibleGatewayPlatform(c) {
+			if isOpenAIResponsesCompatibleGatewayPlatform(c) &&
+				!(getGroupPlatform(c) == service.PlatformOpenAI && isAntigravityChatCompletionsRequest(c)) {
 				h.OpenAIGateway.ChatCompletions(c)
 				return
 			}
@@ -263,7 +297,8 @@ func RegisterGatewayRoutes(
 	}
 	// OpenAI Chat Completions API（不带v1前缀的别名）— auto-route based on group platform
 	r.POST("/chat/completions", bodyLimit, clientRequestID, opsErrorLogger, endpointNorm, gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, func(c *gin.Context) {
-		if isOpenAIResponsesCompatibleGatewayPlatform(c) {
+		if isOpenAIResponsesCompatibleGatewayPlatform(c) &&
+			!(getGroupPlatform(c) == service.PlatformOpenAI && isAntigravityChatCompletionsRequest(c)) {
 			h.OpenAIGateway.ChatCompletions(c)
 			return
 		}

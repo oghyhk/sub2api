@@ -1236,7 +1236,14 @@ func customModelsListAllowsModel(availablePatterns []string, model string) bool 
 func defaultModelIDsForPlatform(platform string) []string {
 	switch platform {
 	case service.PlatformOpenAI:
-		return openai.DefaultModelIDs()
+		ids := make([]string, 0, len(openai.DefaultModels)+len(antigravity.DefaultModels()))
+		for _, model := range openai.DefaultModels {
+			ids = append(ids, model.ID)
+		}
+		for _, model := range antigravity.DefaultModels() {
+			ids = append(ids, model.ID)
+		}
+		return mergeModelIDs(ids, nil)
 	case service.PlatformGemini:
 		ids := make([]string, 0, len(geminicli.DefaultModels))
 		for _, model := range geminicli.DefaultModels {

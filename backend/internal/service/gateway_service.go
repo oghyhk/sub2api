@@ -1243,7 +1243,7 @@ func (s *GatewayService) GetAvailableModels(ctx context.Context, groupID *int64,
 	if platform != "" {
 		filtered := make([]Account, 0)
 		for _, acc := range accounts {
-			if acc.Platform == platform {
+			if acc.Platform == platform || (acc.Platform == PlatformAntigravity && acc.IsMixedSchedulingEnabled()) {
 				filtered = append(filtered, acc)
 			}
 		}

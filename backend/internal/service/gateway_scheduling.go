@@ -204,7 +204,7 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 		logger.LegacyPrintf("service.gateway", "[ModelRoutingDebug] load-aware enabled: group_id=%v model=%s session=%s platform=%s", derefGroupID(groupID), requestedModel, shortSessionHash(sessionHash), platform)
 	}
 
-	accounts, useMixed, err := s.listSchedulableAccounts(ctx, groupID, platform, hasForcePlatform)
+	accounts, useMixed, err := s.listSchedulableAccounts(ctx, groupID, platform, hasForcePlatform, requestedModel)
 	if err != nil {
 		return nil, err
 	}
@@ -953,9 +953,13 @@ func (s *GatewayService) resolvePlatform(ctx context.Context, groupID *int64, gr
 	return PlatformAnthropic, false, nil
 }
 
-func (s *GatewayService) listSchedulableAccounts(ctx context.Context, groupID *int64, platform string, hasForcePlatform bool) ([]Account, bool, error) {
+func (s *GatewayService) listSchedulableAccounts(ctx context.Context, groupID *int64, platform string, hasForcePlatform bool, requestedModel ...string) ([]Account, bool, error) {
+	reqModel := ""
+	if len(requestedModel) > 0 {
+		reqModel = requestedModel[0]
+	}
 	if s.schedulerSnapshot != nil {
-		accounts, useMixed, err := s.schedulerSnapshot.ListSchedulableAccounts(ctx, groupID, platform, hasForcePlatform)
+		accounts, useMixed, err := s.schedulerSnapshot.ListSchedulableAccounts(ctx, groupID, platform, hasForcePlatform, reqModel)
 		if err == nil {
 			slog.Debug("account_scheduling_list_snapshot",
 				"group_id", derefGroupID(groupID),
@@ -976,7 +980,7 @@ func (s *GatewayService) listSchedulableAccounts(ctx context.Context, groupID *i
 		}
 		return accounts, useMixed, err
 	}
-	useMixed := (platform == PlatformAnthropic || platform == PlatformGemini || platform == PlatformOpenAI) && !hasForcePlatform
+	useMixed := (platform == PlatformAnthropic || platform == PlatformGemini || (reqModel != "" && domain.DefaultAntigravityModelMapping[reqModel] != "")) && !hasForcePlatform
 	if useMixed {
 		platforms := []string{platform, PlatformAntigravity}
 		var accounts []Account
@@ -1780,7 +1784,7 @@ func (s *GatewayService) selectAccountForModelWithPlatform(ctx context.Context, 
 			hasForcePlatform = false
 		}
 		var err error
-		accounts, _, err = s.listSchedulableAccounts(ctx, groupID, platform, hasForcePlatform)
+		accounts, _, err = s.listSchedulableAccounts(ctx, groupID, platform, hasForcePlatform, requestedModel)
 		if err == nil {
 			accountsLoaded = true
 			ctx = s.withWindowCostPrefetch(ctx, accounts)
@@ -2065,7 +2069,7 @@ func (s *GatewayService) selectAccountWithMixedScheduling(ctx context.Context, g
 	}
 
 	var accounts []Account
-	accounts, _, err := s.listSchedulableAccounts(ctx, groupID, nativePlatform, false)
+	accounts, _, err := s.listSchedulableAccounts(ctx, groupID, nativePlatform, false, requestedModel)
 	accountsLoaded := err == nil
 	var warmupCandidateIDs map[int64]struct{}
 	if accountsLoaded {

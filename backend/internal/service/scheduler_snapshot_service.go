@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 )
 
@@ -207,8 +208,12 @@ func (s *SchedulerSnapshotService) Stop() {
 	s.wg.Wait()
 }
 
-func (s *SchedulerSnapshotService) ListSchedulableAccounts(ctx context.Context, groupID *int64, platform string, hasForcePlatform bool) ([]Account, bool, error) {
-	useMixed := (platform == PlatformAnthropic || platform == PlatformGemini || platform == PlatformOpenAI) && !hasForcePlatform
+func (s *SchedulerSnapshotService) ListSchedulableAccounts(ctx context.Context, groupID *int64, platform string, hasForcePlatform bool, requestedModel ...string) ([]Account, bool, error) {
+	reqModel := ""
+	if len(requestedModel) > 0 {
+		reqModel = requestedModel[0]
+	}
+	useMixed := (platform == PlatformAnthropic || platform == PlatformGemini || (reqModel != "" && domain.DefaultAntigravityModelMapping[reqModel] != "")) && !hasForcePlatform
 	mode := s.resolveMode(platform, hasForcePlatform)
 	bucket := s.bucketFor(groupID, platform, mode)
 	var writeToken SchedulerBucketWriteToken

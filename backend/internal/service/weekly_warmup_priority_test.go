@@ -103,6 +103,18 @@ func TestWeeklyWarmupUtilizationUsesKnownDashboardWindows(t *testing.T) {
 	}
 }
 
+func TestWeeklyUsageLessPrefersLowerKnownUsage(t *testing.T) {
+	now := time.Now().UTC()
+	lower := &Account{Platform: PlatformAntigravity, Extra: antigravityWeeklyUsageExtra(2, now.Add(time.Hour))}
+	higher := &Account{Platform: PlatformAntigravity, Extra: antigravityWeeklyUsageExtra(8, now.Add(time.Hour))}
+	unknown := &Account{Platform: PlatformAntigravity}
+
+	require.True(t, weeklyUsageLess(lower, higher, "gemini-3.6-flash", now))
+	require.False(t, weeklyUsageLess(higher, lower, "gemini-3.6-flash", now))
+	require.True(t, weeklyUsageLess(lower, unknown, "gemini-3.6-flash", now))
+	require.False(t, weeklyUsageLess(unknown, lower, "gemini-3.6-flash", now))
+}
+
 func TestAntigravityWeeklyUsageExtraUpdatesPersistsDashboardBuckets(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	info := &UsageInfo{

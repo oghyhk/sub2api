@@ -56,6 +56,18 @@ func isWeeklyWarmupAccount(account *Account, requestedModel string, now time.Tim
 	return known && utilization < weeklyWarmupMinimumUsedPercent
 }
 
+// weeklyUsageLess reports whether a has lower known weekly usage than b.
+// Known usage is preferred over unknown usage; unknown values never outrank a
+// measured value. Callers use this as a tie-breaker after priority/load gates.
+func weeklyUsageLess(a, b *Account, requestedModel string, now time.Time) bool {
+	aUsage, aKnown := weeklyWarmupUtilization(a, requestedModel, now)
+	bUsage, bKnown := weeklyWarmupUtilization(b, requestedModel, now)
+	if aKnown != bKnown {
+		return aKnown
+	}
+	return aKnown && aUsage < bUsage
+}
+
 func partitionWeeklyWarmupAccounts(accounts []*Account, requestedModel string, now time.Time) ([]*Account, []*Account) {
 	warmup := make([]*Account, 0, len(accounts))
 	regular := make([]*Account, 0, len(accounts))

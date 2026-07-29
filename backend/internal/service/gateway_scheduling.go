@@ -433,7 +433,8 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 			}
 
 			if len(routingAvailable) > 0 {
-				// 排序：优先级 > 负载率 > 最后使用时间
+				// 排序：优先级 > 负载率 > 周使用量 > 最后使用时间。
+				weeklyUsageNow := time.Now()
 				sort.SliceStable(routingAvailable, func(i, j int) bool {
 					a, b := routingAvailable[i], routingAvailable[j]
 					if a.account.Priority != b.account.Priority {
@@ -441,6 +442,12 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 					}
 					if a.loadInfo.LoadRate != b.loadInfo.LoadRate {
 						return a.loadInfo.LoadRate < b.loadInfo.LoadRate
+					}
+					if weeklyUsageLess(a.account, b.account, requestedModel, weeklyUsageNow) {
+						return true
+					}
+					if weeklyUsageLess(b.account, a.account, requestedModel, weeklyUsageNow) {
+						return false
 					}
 					switch {
 					case a.account.LastUsedAt == nil && b.account.LastUsedAt != nil:
@@ -1856,6 +1863,7 @@ func (s *GatewayService) selectAccountForModelWithPlatform(ctx context.Context, 
 		}
 
 		var selected *Account
+		weeklyUsageNow := time.Now()
 		for i := range accounts {
 			acc := &accounts[i]
 			if _, ok := routingSet[acc.ID]; !ok {
@@ -1902,6 +1910,13 @@ func (s *GatewayService) selectAccountForModelWithPlatform(ctx context.Context, 
 			if acc.Priority < selected.Priority {
 				selected = acc
 			} else if acc.Priority == selected.Priority {
+				if weeklyUsageLess(acc, selected, requestedModel, weeklyUsageNow) {
+					selected = acc
+					continue
+				}
+				if weeklyUsageLess(selected, acc, requestedModel, weeklyUsageNow) {
+					continue
+				}
 				switch {
 				case acc.LastUsedAt == nil && selected.LastUsedAt != nil:
 					selected = acc
@@ -1975,6 +1990,7 @@ func (s *GatewayService) selectAccountForModelWithPlatform(ctx context.Context, 
 	// 因为粘性会话优先保持连接一致性，且 upstream 计费基准极少使用。
 	needsUpstreamCheck := s.needsUpstreamChannelRestrictionCheck(ctx, groupID)
 	var selected *Account
+	weeklyUsageNow := time.Now()
 	for i := range accounts {
 		acc := &accounts[i]
 		if _, excluded := excludedIDs[acc.ID]; excluded {
@@ -2021,6 +2037,13 @@ func (s *GatewayService) selectAccountForModelWithPlatform(ctx context.Context, 
 		if acc.Priority < selected.Priority {
 			selected = acc
 		} else if acc.Priority == selected.Priority {
+			if weeklyUsageLess(acc, selected, requestedModel, weeklyUsageNow) {
+				selected = acc
+				continue
+			}
+			if weeklyUsageLess(selected, acc, requestedModel, weeklyUsageNow) {
+				continue
+			}
 			switch {
 			case acc.LastUsedAt == nil && selected.LastUsedAt != nil:
 				selected = acc
@@ -2139,6 +2162,7 @@ func (s *GatewayService) selectAccountWithMixedScheduling(ctx context.Context, g
 		}
 
 		var selected *Account
+		weeklyUsageNow := time.Now()
 		for i := range accounts {
 			acc := &accounts[i]
 			if _, ok := routingSet[acc.ID]; !ok {
@@ -2189,6 +2213,13 @@ func (s *GatewayService) selectAccountWithMixedScheduling(ctx context.Context, g
 			if acc.Priority < selected.Priority {
 				selected = acc
 			} else if acc.Priority == selected.Priority {
+				if weeklyUsageLess(acc, selected, requestedModel, weeklyUsageNow) {
+					selected = acc
+					continue
+				}
+				if weeklyUsageLess(selected, acc, requestedModel, weeklyUsageNow) {
+					continue
+				}
 				switch {
 				case acc.LastUsedAt == nil && selected.LastUsedAt != nil:
 					selected = acc

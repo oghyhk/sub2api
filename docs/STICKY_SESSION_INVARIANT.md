@@ -27,6 +27,10 @@ account selection, or weekly-usage scheduling must preserve these rules.
   sticky conversation.
 - Usage at or above `1%` means the account has warmed up and returns to normal
   sticky-session scheduling. Values such as `0.01%` remain in warm-up.
+- When a new account must be selected, the scheduler keeps its normal priority
+  and load-safety gates, then prefers the account with lower known weekly usage
+  before using last-used time as the tie-breaker. An established sticky session
+  still wins while its account remains schedulable.
 - Changes to sticky-session recovery must not disable, shortcut, or reinterpret
   this policy. The regression test `TestAntigravityWeeklyWarmupOverridesThenRestoresSticky`
   protects this boundary.

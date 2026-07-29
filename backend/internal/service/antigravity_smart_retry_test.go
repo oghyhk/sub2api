@@ -142,7 +142,7 @@ func TestHandleSmartRetry_LongDelay_ReturnsSwitchError(t *testing.T) {
 		Platform: PlatformAntigravity,
 	}
 
-	// 15s >= 7s 阈值，应该返回 switchError
+	// 15s >= 15s 阈值，应该返回 switchError
 	respBody := []byte(`{
 		"error": {
 			"status": "RESOURCE_EXHAUSTED",
@@ -210,7 +210,7 @@ func TestHandleSmartRetry_ShortDelay_SmartRetrySuccess(t *testing.T) {
 		Platform: PlatformAntigravity,
 	}
 
-	// 0.5s < 7s 阈值，应该触发智能重试
+	// 0.5s < 15s 阈值，应该触发智能重试
 	respBody := []byte(`{
 		"error": {
 			"status": "RESOURCE_EXHAUSTED",
@@ -283,7 +283,7 @@ func TestHandleSmartRetry_ShortDelay_SmartRetryFailed_ReturnsSwitchError(t *test
 		Platform: PlatformAntigravity,
 	}
 
-	// 3s < 7s 阈值，应该触发智能重试（最多 1 次）
+	// 3s < 15s 阈值，应该触发智能重试（最多 1 次）
 	respBody := []byte(`{
 		"error": {
 			"status": "RESOURCE_EXHAUSTED",
@@ -565,13 +565,13 @@ func TestHandleSmartRetry_ExactlyAtThreshold_ReturnsSwitchError(t *testing.T) {
 		Platform: PlatformAntigravity,
 	}
 
-	// 刚好 7s = 7s 阈值，应该返回 switchError
+	// 刚好 15s = 15s 阈值，应该返回 switchError
 	respBody := []byte(`{
 		"error": {
 			"status": "RESOURCE_EXHAUSTED",
 			"details": [
 				{"@type": "type.googleapis.com/google.rpc.ErrorInfo", "metadata": {"model": "gemini-pro"}, "reason": "RATE_LIMIT_EXCEEDED"},
-				{"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "7s"}
+				{"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "15s"}
 			]
 		}
 	}`)
@@ -681,7 +681,7 @@ func TestHandleSmartRetry_NetworkError_ExhaustsRetry(t *testing.T) {
 		Platform: PlatformAntigravity,
 	}
 
-	// 0.1s < 7s 阈值，应该触发智能重试
+	// 0.1s < 15s 阈值，应该触发智能重试
 	respBody := []byte(`{
 		"error": {
 			"status": "RESOURCE_EXHAUSTED",
@@ -1117,7 +1117,7 @@ func TestHandleSmartRetry_LongDelay_StickySession_ClearsSession(t *testing.T) {
 		Platform: PlatformAntigravity,
 	}
 
-	// 15s >= 7s 阈值 → 走长延迟路径
+	// 15s >= 15s 阈值 → 走长延迟路径
 	respBody := []byte(`{
 		"error": {
 			"status": "RESOURCE_EXHAUSTED",

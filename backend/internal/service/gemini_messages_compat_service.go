@@ -30,7 +30,7 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-const geminiStickySessionTTL = time.Hour
+const geminiStickySessionTTL = 24 * time.Hour
 
 const (
 	geminiMaxRetries     = 5

@@ -62,12 +62,13 @@ func TestForwardAsChatCompletionsAntigravityUsesGeminiTransport(t *testing.T) {
 		},
 	}
 
-	result, err := svc.ForwardAsChatCompletions(context.Background(), c, account, body)
+	result, err := svc.ForwardAsChatCompletions(context.Background(), c, account, body, "cache:digest:abc:uuid")
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Equal(t, http.StatusOK, writer.Code)
 	require.Equal(t, "gemini-3.6-flash-high", result.UpstreamModel)
 	require.Len(t, upstream.requestBodies, 1)
+	require.Contains(t, string(upstream.requestBodies[0]), `"sessionId":"sub2api-`, "compat requests must forward their stable affinity to Gemini")
 
 	var response struct {
 		Choices []struct {

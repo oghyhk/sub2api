@@ -28,8 +28,13 @@ func (s *GeminiMessagesCompatService) ForwardAsChatCompletions(
 	c *gin.Context,
 	account *Account,
 	body []byte,
+	sessionHashes ...string,
 ) (*ForwardResult, error) {
 	startTime := time.Now()
+	sessionHash := ""
+	if len(sessionHashes) > 0 {
+		sessionHash = strings.TrimSpace(sessionHashes[0])
+	}
 
 	var ccReq apicompat.ChatCompletionsRequest
 	if err := json.Unmarshal(body, &ccReq); err != nil {
@@ -59,7 +64,7 @@ func (s *GeminiMessagesCompatService) ForwardAsChatCompletions(
 		return nil, fmt.Errorf("marshal chat completions compat request: %w", err)
 	}
 
-	return s.forwardClaudeBodyAsChatCompletions(ctx, c, account, claudeBody, originalModel, clientStream, includeUsage, startTime, body)
+	return s.forwardClaudeBodyAsChatCompletions(ctx, c, account, claudeBody, originalModel, clientStream, includeUsage, startTime, body, sessionHash)
 }
 
 func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
@@ -72,6 +77,7 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 	includeUsage bool,
 	startTime time.Time,
 	originalChatBody []byte,
+	sessionHash string,
 ) (*ForwardResult, error) {
 	var req struct {
 		Model  string `json:"model"`
@@ -105,6 +111,7 @@ func (s *GeminiMessagesCompatService) forwardClaudeBodyAsChatCompletions(
 			includeUsage,
 			startTime,
 			originalChatBody,
+			sessionHash,
 		)
 	}
 
@@ -317,6 +324,7 @@ func (s *GeminiMessagesCompatService) forwardAntigravityAsChatCompletions(
 	includeUsage bool,
 	startTime time.Time,
 	originalChatBody []byte,
+	sessionHash string,
 ) (*ForwardResult, error) {
 	if s.antigravityGatewayService == nil {
 		return nil, s.writeChatCompletionsError(c, http.StatusBadGateway, "upstream_error", "Antigravity gateway service is not configured")
@@ -336,6 +344,7 @@ func (s *GeminiMessagesCompatService) forwardAntigravityAsChatCompletions(
 		clientStream,
 		geminiReq,
 		false,
+		WithForwardGeminiSession(0, sessionHash),
 	)
 	if err != nil {
 		return nil, err

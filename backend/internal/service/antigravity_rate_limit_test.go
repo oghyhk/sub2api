@@ -544,7 +544,7 @@ func TestShouldTriggerAntigravitySmartRetry(t *testing.T) {
 		modelName                        string
 	}{
 		{
-			name:    "OAuth account with short delay (< 7s) - smart retry",
+			name:    "OAuth account with short delay (< 15s) - smart retry",
 			account: oauthAccount,
 			body: `{
 				"error": {
@@ -578,7 +578,7 @@ func TestShouldTriggerAntigravitySmartRetry(t *testing.T) {
 			modelName:               "gemini-3-flash",
 		},
 		{
-			name:    "OAuth account with long delay (>= 7s) - direct rate limit",
+			name:    "OAuth account with long delay (>= 15s) - direct rate limit",
 			account: oauthAccount,
 			body: `{
 				"error": {
@@ -626,20 +626,20 @@ func TestShouldTriggerAntigravitySmartRetry(t *testing.T) {
 			expectedShouldRateLimit: false,
 		},
 		{
-			name:    "OAuth account with exactly 7s delay - direct rate limit",
+			name:    "OAuth account with exactly 15s delay - direct rate limit",
 			account: oauthAccount,
 			body: `{
 				"error": {
 					"status": "RESOURCE_EXHAUSTED",
 					"details": [
 						{"@type": "type.googleapis.com/google.rpc.ErrorInfo", "metadata": {"model": "gemini-pro"}, "reason": "RATE_LIMIT_EXCEEDED"},
-						{"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "7s"}
+						{"@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "15s"}
 					]
 				}
 			}`,
 			expectedShouldRetry:     false,
 			expectedShouldRateLimit: true,
-			minWait:                 7 * time.Second,
+			minWait:                 15 * time.Second,
 			modelName:               "gemini-pro",
 		},
 		{

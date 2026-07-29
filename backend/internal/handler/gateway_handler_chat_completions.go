@@ -11,6 +11,7 @@ import (
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/tidwall/gjson"
 	"go.uber.org/zap"
 )
@@ -142,14 +143,41 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 		parsedReq = &service.ParsedRequest{Model: reqModel, Stream: reqStream, Body: bodyRef}
 	}
 	parsedReq.SessionContext = &service.SessionContext{
-		ClientIP:  ip.GetClientIP(c),
-		UserAgent: c.GetHeader("User-Agent"),
-		APIKeyID:  apiKey.ID,
+		ClientIP:        ip.GetClientIP(c),
+		UserAgent:       c.GetHeader("User-Agent"),
+		APIKeyID:        apiKey.ID,
+		ClientSessionID: service.ScopedClientSessionID(apiKey.ID, c.GetHeader("X-Sub2API-Session-ID")),
 	}
-	sessionHash := h.gatewayService.GenerateSessionHash(parsedReq)
 	groupPlatform := ""
 	if apiKey.Group != nil {
 		groupPlatform = apiKey.Group.Platform
+	}
+	cacheModel := reqModel
+	if channelMapping.Mapped && channelMapping.MappedModel != "" {
+		cacheModel = channelMapping.MappedModel
+	}
+
+	// Resolve a protocol-neutral digest lineage before normal sticky selection.
+	// This lets expanding OpenAI Chat Completions histories recover the same
+	// account as native Gemini/Hermes conversations without requiring client
+	// configuration.
+	sessionHash := h.gatewayService.GenerateSessionHash(parsedReq)
+	digestChain := service.BuildAnthropicDigestChain(parsedReq)
+	prefixHash := ""
+	sessionUUID := ""
+	matchedDigestChain := ""
+	if parsedReq.SessionContext.ClientSessionID == "" && parsedReq.MetadataUserID == "" && digestChain != "" {
+		prefixHash = service.GenerateCachePrefixHash(subject.UserID, apiKey.ID, c.GetHeader("User-Agent"), groupPlatform, cacheModel)
+		if foundUUID, foundAccountID, foundChain, found := h.gatewayService.FindGeminiSession(c.Request.Context(), derefGroupID(apiKey.GroupID), prefixHash, digestChain); found {
+			sessionUUID = foundUUID
+			matchedDigestChain = foundChain
+			sessionHash = service.GenerateCacheDigestSessionKey(prefixHash, foundUUID)
+			_ = h.gatewayService.BindStickySession(c.Request.Context(), apiKey.GroupID, sessionHash, foundAccountID)
+			reqLog.Info("cache_affinity.digest_matched", zap.Int64("account_id", foundAccountID), zap.String("session_uuid_prefix", safeShortPrefix(foundUUID, 8)))
+		} else {
+			sessionUUID = uuid.NewString()
+			sessionHash = service.GenerateCacheDigestSessionKey(prefixHash, sessionUUID)
+		}
 	}
 	selectionSessionHash := sessionHash
 	if groupPlatform == service.PlatformGemini && selectionSessionHash != "" {
@@ -246,7 +274,7 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 				}
 				return
 			}
-			result, err = h.geminiCompatService.ForwardAsChatCompletions(c.Request.Context(), c, account, forwardBody)
+			result, err = h.geminiCompatService.ForwardAsChatCompletions(c.Request.Context(), c, account, forwardBody, selectionSessionHash)
 		} else {
 			result, err = h.gatewayService.ForwardAsChatCompletions(c.Request.Context(), c, account, forwardBody, parsedReq)
 		}
@@ -286,6 +314,12 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 				zap.Error(err),
 			)
 			return
+		}
+
+		if digestChain != "" && prefixHash != "" && sessionUUID != "" {
+			if err := h.gatewayService.SaveGeminiSession(c.Request.Context(), derefGroupID(apiKey.GroupID), prefixHash, digestChain, sessionUUID, account.ID, matchedDigestChain); err != nil {
+				reqLog.Warn("cache_affinity.digest_session_save_failed", zap.Int64("account_id", account.ID), zap.Error(err))
+			}
 		}
 
 		// 6. Record usage

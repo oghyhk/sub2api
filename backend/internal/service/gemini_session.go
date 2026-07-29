@@ -70,7 +70,8 @@ func canonicalGeminiPartsForDigest(parts []antigravity.GeminiPart) []antigravity
 	return canonical
 }
 
-// GenerateGeminiPrefixHash generates a stable digest-store namespace.
+// GenerateCachePrefixHash generates a stable digest-store namespace shared by
+// native Gemini, OpenAI-compatible chat clients, and agent clients.
 //
 // Do not reintroduce the observed client IP here. Public clients commonly arrive
 // through Cloudflare or another reverse proxy whose egress IP changes between
@@ -78,9 +79,10 @@ func canonicalGeminiPartsForDigest(parts []antigravity.GeminiPart) []antigravity
 // sticky conversation. API-key identity, normalized user agent, platform, and
 // model provide the required isolation without depending on network topology.
 //
-// 组合: userID + apiKeyID + userAgent + platform + model
-// 返回 16 字符的 Base64 编码的 SHA256 前缀
-func GenerateGeminiPrefixHash(userID, apiKeyID int64, _ string, userAgent, platform, model string) string {
+// Composition: userID + apiKeyID + userAgent + platform + model.
+// It deliberately excludes observed client IP because proxy egress addresses
+// routinely change within one logical conversation.
+func GenerateCachePrefixHash(userID, apiKeyID int64, userAgent, platform, model string) string {
 	// 组合所有标识符
 	normalizedUserAgent := NormalizeSessionUserAgent(userAgent)
 	combined := strconv.FormatInt(userID, 10) + ":" +
@@ -92,6 +94,12 @@ func GenerateGeminiPrefixHash(userID, apiKeyID int64, _ string, userAgent, platf
 	hash := sha256.Sum256([]byte(combined))
 	// 取前 12 字节，Base64 编码后正好 16 字符
 	return base64.RawURLEncoding.EncodeToString(hash[:12])
+}
+
+// GenerateGeminiPrefixHash remains as a compatibility wrapper for existing
+// native Gemini call sites. clientIP is intentionally ignored.
+func GenerateGeminiPrefixHash(userID, apiKeyID int64, _ string, userAgent, platform, model string) string {
+	return GenerateCachePrefixHash(userID, apiKeyID, userAgent, platform, model)
 }
 
 // ParseGeminiSessionValue 解析 Gemini 会话缓存值
@@ -124,6 +132,23 @@ func FormatGeminiSessionValue(uuid string, accountID int64) string {
 
 // geminiDigestSessionKeyPrefix Gemini 摘要 fallback 会话 key 前缀
 const geminiDigestSessionKeyPrefix = "gemini:digest:"
+
+const cacheDigestSessionKeyPrefix = "cache:digest:"
+
+// GenerateCacheDigestSessionKey produces the protocol-neutral sticky key for a
+// digest lineage. It contains only shortened hashes/UUIDs and is safe to store
+// in Redis logs without exposing request content.
+func GenerateCacheDigestSessionKey(prefixHash, uuid string) string {
+	prefix := prefixHash
+	if len(prefix) > 8 {
+		prefix = prefix[:8]
+	}
+	uuidPart := uuid
+	if len(uuidPart) > 8 {
+		uuidPart = uuidPart[:8]
+	}
+	return cacheDigestSessionKeyPrefix + prefix + ":" + uuidPart
+}
 
 // GenerateGeminiDigestSessionKey 生成 Gemini 摘要 fallback 的 sessionKey
 // 组合 prefixHash 前 8 位 + uuid 前 8 位，确保不同会话产生不同的 sessionKey

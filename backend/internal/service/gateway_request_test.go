@@ -739,6 +739,13 @@ func TestEnsureGeminiFunctionCallIDs(t *testing.T) {
 		require.True(t, strings.HasPrefix(id, "toolu_"))
 	})
 
+	t.Run("missing IDs are deterministic across forwarded turns", func(t *testing.T) {
+		input := []byte(`{"contents":[{"role":"model","parts":[{"functionCall":{"name":"Bash","args":{"command":"ls"}}}]},{"role":"user","parts":[{"functionResponse":{"name":"Bash","response":{"output":"ok"}}}]}]}`)
+		first := EnsureGeminiFunctionCallIDs(input)
+		second := EnsureGeminiFunctionCallIDs(input)
+		require.Equal(t, first, second, "identical history must not receive random tool IDs")
+	})
+
 	t.Run("pairs functionResponse.id with functionCall.id by name", func(t *testing.T) {
 		input := []byte(`{"contents":[
 			{"role":"user","parts":[{"text":"run bash"}]},

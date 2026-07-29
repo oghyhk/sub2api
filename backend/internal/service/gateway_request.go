@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -53,6 +54,10 @@ type SessionContext struct {
 	ClientIP  string
 	UserAgent string
 	APIKeyID  int64
+	// ClientSessionID is an optional explicit conversation identifier supplied
+	// by a client header or protocol field. Callers should scope it to the
+	// API-key identity before assigning it here.
+	ClientSessionID string
 }
 
 type jsonRange struct {
@@ -599,7 +604,7 @@ func EnsureToolUseIDs(body []byte) []byte {
 	}
 
 	type pendingUse struct {
-		id      string
+		id       string
 		assigned bool
 	}
 	uses := make([]pendingUse, 0, 8)
@@ -694,8 +699,8 @@ func EnsureGeminiFunctionCallIDs(body []byte) []byte {
 	// First pass: assign IDs to functionCalls, track by name.
 	pendingByName := make(map[string][]string)
 	modified := false
-	counter := 0
-	for _, turn := range contentsSlice {
+	occurrenceByName := make(map[string]int)
+	for turnIndex, turn := range contentsSlice {
 		turnMap, ok := turn.(map[string]any)
 		if !ok {
 			continue
@@ -711,13 +716,13 @@ func EnsureGeminiFunctionCallIDs(body []byte) []byte {
 			}
 			if fc, ok := partMap["functionCall"].(map[string]any); ok {
 				id, _ := fc["id"].(string)
+				name, _ := fc["name"].(string)
 				if strings.TrimSpace(id) == "" {
-					counter++
-					id = fmt.Sprintf("toolu_%s", randomHex(8))
+					occurrenceByName[name]++
+					id = deterministicGeminiFunctionCallID(turnIndex, ci, name, fc["args"], occurrenceByName[name])
 					fc["id"] = id
 					modified = true
 				}
-				name, _ := fc["name"].(string)
 				pendingByName[name] = append(pendingByName[name], id)
 				parts[ci] = partMap
 			}
@@ -769,6 +774,21 @@ func EnsureGeminiFunctionCallIDs(body []byte) []byte {
 		return body
 	}
 	return out
+}
+
+// deterministicGeminiFunctionCallID derives an ID from the logical historical
+// call instead of minting randomness on every forwarded turn. Google uses these
+// IDs when converting Gemini function calls to Anthropic tool_use blocks, so a
+// random value changes the provider cache prefix even when the client history is
+// otherwise identical.
+func deterministicGeminiFunctionCallID(turnIndex, partIndex int, name string, args any, occurrence int) string {
+	canonicalArgs, err := json.Marshal(args)
+	if err != nil {
+		canonicalArgs = []byte("null")
+	}
+	payload := fmt.Sprintf("gemini-function-call|%d|%d|%d|%s|%s", turnIndex, partIndex, occurrence, strings.TrimSpace(name), canonicalArgs)
+	digest := sha256.Sum256([]byte(payload))
+	return fmt.Sprintf("toolu_%x", digest[:12])
 }
 
 // ConvertGeminiToAnthropicBody converts a Gemini-format request body (contents)
@@ -869,9 +889,9 @@ func ConvertGeminiToAnthropicBody(body []byte) []byte {
 					matched = "toolu_" + randomHex(12)
 				}
 				tr := map[string]any{
-					"type":         "tool_result",
-					"tool_use_id":  matched,
-					"content":      resultContent,
+					"type":        "tool_result",
+					"tool_use_id": matched,
+					"content":     resultContent,
 				}
 				content = append(content, tr)
 				continue

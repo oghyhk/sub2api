@@ -8,8 +8,9 @@ import (
 	gocache "github.com/patrickmn/go-cache"
 )
 
-// digestSessionTTL 摘要会话默认 TTL
-const digestSessionTTL = 30 * time.Minute
+// digestSessionTTL keeps a logical desktop/agent conversation recoverable after
+// normal pauses. It is refreshed whenever the digest lineage advances.
+const digestSessionTTL = 24 * time.Hour
 
 // sessionEntry flat cache 条目
 type sessionEntry struct {

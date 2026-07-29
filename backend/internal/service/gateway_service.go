@@ -31,8 +31,11 @@ import (
 const (
 	claudeAPIURL            = "https://api.anthropic.com/v1/messages?beta=true"
 	claudeAPICountTokensURL = "https://api.anthropic.com/v1/messages/count_tokens?beta=true"
-	stickySessionTTL        = time.Hour // 粘性会话TTL
-	defaultMaxLineSize      = 500 * 1024 * 1024
+	// Keep desktop and agent conversations affined across ordinary pauses.
+	// This is a sliding TTL and still yields immediately when the bound account
+	// becomes unavailable or policy requires failover.
+	stickySessionTTL   = 24 * time.Hour
+	defaultMaxLineSize = 500 * 1024 * 1024
 	// Canonical Claude Code banner. Keep it EXACT (no trailing whitespace/newlines)
 	// to match real Claude CLI traffic as closely as possible. When we need a visual
 	// separator between system blocks, we add "\n\n" at concatenation time.
@@ -62,9 +65,6 @@ IMPORTANT: You must NEVER generate or guess URLs for the user unless you are con
 	debugGatewayBodyEnv                    = "SUB2API_DEBUG_GATEWAY_BODY"
 	// 上游错误体只需要提取错误 JSON/日志摘要，默认 512KiB 避免错误风暴叠加大请求体。
 	gatewayUpstreamErrorBodyReadLimit int64 = 512 << 10
-	// sessionHashFallbackMaxMessages 限制 fallback hash 仅取前 N 条消息，
-	// 避免随对话增长 hash 持续变化导致粘性绑定丢失。
-	sessionHashFallbackMaxMessages = 4
 )
 
 const (
@@ -810,6 +810,9 @@ func (s *GatewayService) GenerateSessionHash(parsed *ParsedRequest) string {
 	if parsed == nil {
 		return ""
 	}
+	if parsed.SessionContext != nil && strings.TrimSpace(parsed.SessionContext.ClientSessionID) != "" {
+		return strings.TrimSpace(parsed.SessionContext.ClientSessionID)
+	}
 
 	// 1. 最高优先级：从 metadata.user_id 提取 session_xxx
 	if parsed.MetadataUserID != "" {
@@ -840,8 +843,11 @@ func (s *GatewayService) GenerateSessionHash(parsed *ParsedRequest) string {
 		return hash
 	}
 
-	// 3. 最后 fallback: 使用 session上下文 + system + 前几条消息的摘要串
-	//    只取前 N 条消息，避免随对话增长 hash 持续变化导致粘性绑定丢失
+	// 3. Final fallback: use tenant context + system + the first user turn.
+	// Hashing a growing history loses stickiness every turn; hashing the first N
+	// turns still drifts during the first N requests. The first user turn is
+	// stable from request one, while digest lineage below provides the richer
+	// continuation matcher for supported handlers.
 	var combined strings.Builder
 	// 混入请求上下文区分因子，避免不同用户相同消息产生相同 hash
 	if parsed.SessionContext != nil {
@@ -854,7 +860,7 @@ func (s *GatewayService) GenerateSessionHash(parsed *ParsedRequest) string {
 		_, _ = combined.WriteString(systemText)
 	}
 	contentStart := combined.Len()
-	appendMessageTextsFromRaw(&combined, parsed.MessagesRaw())
+	appendFirstUserMessageAnchorFromRaw(&combined, parsed.MessagesRaw())
 	if combined.Len() == contentStart {
 		appendResponsesSessionAnchorFromRaw(&combined, parsed.InputRaw())
 	}
@@ -1051,6 +1057,51 @@ func appendFirstNMessageTextsFromRaw(builder *strings.Builder, raw []byte, maxN 
 		}
 		return true
 	})
+}
+
+// appendFirstUserMessageAnchorFromRaw appends a canonical representation of
+// the first user turn. It intentionally ignores all later history so clients
+// without an explicit session identifier retain affinity from their first turn.
+func appendFirstUserMessageAnchorFromRaw(builder *strings.Builder, raw []byte) {
+	if builder == nil || len(raw) == 0 {
+		return
+	}
+	messages := parseRawJSONView(raw)
+	if !messages.IsArray() {
+		return
+	}
+	messages.ForEach(func(_, msg gjson.Result) bool {
+		if strings.ToLower(strings.TrimSpace(msg.Get("role").String())) != "user" {
+			return true
+		}
+		content := msg.Get("content")
+		if content.Exists() {
+			_, _ = builder.WriteString("user:")
+			_, _ = builder.Write(canonicalSessionAnchorJSON([]byte(content.Raw)))
+			return false
+		}
+		parts := msg.Get("parts")
+		if parts.Exists() {
+			_, _ = builder.WriteString("user:")
+			_, _ = builder.Write(canonicalSessionAnchorJSON([]byte(parts.Raw)))
+		}
+		return false
+	})
+}
+
+func canonicalSessionAnchorJSON(raw []byte) []byte {
+	if len(raw) == 0 {
+		return raw
+	}
+	var value any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return bytes.TrimSpace(raw)
+	}
+	canonical, err := json.Marshal(value)
+	if err != nil {
+		return bytes.TrimSpace(raw)
+	}
+	return canonical
 }
 
 func appendResponsesSessionAnchorFromRaw(builder *strings.Builder, raw []byte) {

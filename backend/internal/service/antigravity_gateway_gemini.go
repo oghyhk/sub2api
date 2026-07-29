@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,6 +15,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/gin-gonic/gin"
+	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
 
 // ForwardGemini 转发 Gemini 协议请求
@@ -140,6 +143,14 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 	// 并按顺序配对 tool_result.tool_use_id）。
 	injectedBody = EnsureToolUseIDs(injectedBody)
 	injectedBody = EnsureGeminiFunctionCallIDs(injectedBody)
+	// Native Gemini clients often omit sessionId. Give every logical Sub2API
+	// conversation a stable, account/model-scoped upstream session identifier so
+	// Google can retain affinity without coupling unrelated tenants. Explicit
+	// client sessionId values remain untouched.
+	injectedBody, upstreamSessionID := ensureGeminiUpstreamSessionID(injectedBody, forwardOpts.sessionHash, account.ID, mappedModel)
+	cachePrefixFingerprint := CachePrefixFingerprint(injectedBody)
+	logger.LegacyPrintf("service.cache_affinity", "[CacheAffinity] account=%d model=%s session=%s upstream_session=%s prefix=%s",
+		account.ID, mappedModel, shortSessionHash(forwardOpts.sessionHash), safeAffinityPrefix(upstreamSessionID), cachePrefixFingerprint)
 
 	// 包装请求
 	wrappedBody, err := s.wrapV1InternalRequest(projectID, mappedModel, injectedBody)
@@ -454,6 +465,30 @@ handleSuccess:
 		ImageSize:        imageSize,
 		ImageInputSize:   imageInputSize,
 	}, nil
+}
+
+func ensureGeminiUpstreamSessionID(body []byte, sessionHash string, accountID int64, model string) ([]byte, string) {
+	if existing := strings.TrimSpace(gjson.GetBytes(body, "sessionId").String()); existing != "" {
+		return body, existing
+	}
+	if strings.TrimSpace(sessionHash) == "" || accountID <= 0 {
+		return body, ""
+	}
+	payload := fmt.Sprintf("sub2api-cache-affinity|%s|%d|%s", sessionHash, accountID, strings.TrimSpace(model))
+	digest := sha256.Sum256([]byte(payload))
+	sessionID := fmt.Sprintf("sub2api-%x", digest[:12])
+	patched, err := sjson.SetBytes(body, "sessionId", sessionID)
+	if err != nil {
+		return body, ""
+	}
+	return patched, sessionID
+}
+
+func safeAffinityPrefix(value string) string {
+	if len(value) <= 12 {
+		return value
+	}
+	return value[:12]
 }
 
 // cleanGeminiRequest 清理 Gemini 请求体中的 Schema

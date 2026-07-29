@@ -1,13 +1,18 @@
 # Sticky Session and Weekly Warm-up Invariants
 
-This document defines the non-negotiable routing behavior for the Google
+This document defines the non-negotiable routing behavior for every gateway
+client (WorkBuddy, OpenCode, Hermes, and native Gemini) that can use the Google
 Antigravity account pool. Any change to session hashing, the digest store,
-account selection, or weekly-usage scheduling must preserve these rules.
+request transforms, account selection, or weekly-usage scheduling must preserve
+these rules.
 
 ## Sticky conversation identity
 
-- A continuing Gemini conversation must remain on its assigned account while
-  that account is schedulable.
+- A continuing conversation must remain on its assigned account while that
+  account is schedulable. The sliding affinity window is 24 hours.
+- An explicit caller session ID is preferred and is API-key scoped. Without one,
+  the fallback identity uses the system prompt plus the first user turn, so a
+  client that resends growing history does not rotate accounts on every turn.
 - The primary session cache is the fast path. The digest store is the recovery
   path when a client changes its request hash, the cache expires, or a proxy
   changes network metadata.
@@ -19,6 +24,20 @@ account selection, or weekly-usage scheduling must preserve these rules.
   reverse proxies legitimately rotate their egress IP between consecutive turns.
 - A missing binding with an old thought signature must clean that signature once,
   establish a new binding, and save the updated digest for future turns.
+- Native Gemini forwarding must preserve explicit `sessionId` values. When one
+  is absent, it injects a deterministic account/model-scoped value derived from
+  the logical session; random values are forbidden.
+- Tool-call repair must be deterministic for the same request. Randomly minted
+  function-call IDs mutate the historical prefix and cause an avoidable Google
+  cache miss even if the account did not rotate.
+
+## Failover boundary
+
+- A short upstream retry delay is retried on the same bound account to preserve
+  cache warmth. A delay of **15 seconds or more**, an unavailable account, or a
+  hard upstream failure may trigger normal failover.
+- Failover is an availability recovery path, not a load-balancing mechanism for
+  an otherwise healthy sticky conversation.
 
 ## Weekly usage-bar warm-up
 
@@ -40,9 +59,11 @@ account selection, or weekly-usage scheduling must preserve these rules.
 Run the focused tests below and retain a pre-deployment database backup:
 
 ```powershell
-go test -tags unit ./internal/service -run 'Test(BuildGeminiDigestChain|GenerateGeminiPrefixHash|AntigravityWeeklyWarmup)'
-go test -tags unit ./internal/service -run 'TestDigestSession'
+go test -tags=unit -p 1 ./internal/service -run 'Test(GenerateSessionHash|EnsureGeminiFunctionCallIDs|CachePrefix|EnsureGeminiUpstreamSession|ScopedClient|AntigravityWeeklyWarmup|HandleSmartRetry_ExactlyAtThreshold)'
+go test -tags=unit -p 1 ./internal/service -run 'TestDigestSession'
 ```
 
-Then make a multi-turn Gemini request through the public Cloudflare endpoint and
-verify the access log reports the same `account_id` across the conversation.
+Then make multi-turn requests through the OpenAI-compatible and native Gemini
+endpoints and verify the cache-affinity log lines retain the same account and
+prefix fingerprint across the conversation. Do not log request content or raw
+session IDs.

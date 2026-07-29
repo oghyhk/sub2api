@@ -46,8 +46,14 @@ func TestWeeklyWarmupUtilizationUsesKnownDashboardWindows(t *testing.T) {
 			known:   true,
 		},
 		{
-			name:    "OpenAI fractional positive usage is not warm-up",
+			name:    "OpenAI usage below one percent remains warm-up",
 			account: &Account{Platform: PlatformOpenAI, Extra: openAIWeeklyUsageExtra(0.01, now.Add(7*24*time.Hour))},
+			warmup:  true,
+			known:   true,
+		},
+		{
+			name:    "OpenAI usage at one percent is not warm-up",
+			account: &Account{Platform: PlatformOpenAI, Extra: openAIWeeklyUsageExtra(1, now.Add(7*24*time.Hour))},
 			known:   true,
 		},
 		{
@@ -64,8 +70,15 @@ func TestWeeklyWarmupUtilizationUsesKnownDashboardWindows(t *testing.T) {
 			known:   true,
 		},
 		{
-			name:    "Antigravity Gemini fractional positive usage is not warm-up",
+			name:    "Antigravity Gemini usage below one percent remains warm-up",
 			account: &Account{Platform: PlatformAntigravity, Extra: antigravityWeeklyUsageExtra(0.01, now.Add(7*24*time.Hour))},
+			model:   "gemini-3.1-pro",
+			warmup:  true,
+			known:   true,
+		},
+		{
+			name:    "Antigravity Gemini usage at one percent is not warm-up",
+			account: &Account{Platform: PlatformAntigravity, Extra: antigravityWeeklyUsageExtra(1, now.Add(7*24*time.Hour))},
 			model:   "gemini-3.1-pro",
 			known:   true,
 		},
@@ -175,7 +188,7 @@ func TestOpenAILegacySchedulerWeeklyWarmupOverridesSticky(t *testing.T) {
 	selection.ReleaseFunc()
 }
 
-func TestOpenAIAdvancedSchedulerReturnsToStickyAfterFractionalUsage(t *testing.T) {
+func TestOpenAIAdvancedSchedulerReturnsToStickyAfterOnePercentUsage(t *testing.T) {
 	resetOpenAIAdvancedSchedulerSettingCacheForTest()
 	now := time.Now().UTC()
 	groupID := int64(7404)
@@ -187,9 +200,9 @@ func TestOpenAIAdvancedSchedulerReturnsToStickyAfterFractionalUsage(t *testing.T
 	other := Account{
 		ID: 74042, Platform: PlatformOpenAI, Type: AccountTypeOAuth,
 		Status: StatusActive, Schedulable: true, Concurrency: 1, GroupIDs: []int64{groupID},
-		Extra: openAIWeeklyUsageExtra(0.01, now.Add(7*24*time.Hour)),
+		Extra: openAIWeeklyUsageExtra(1, now.Add(7*24*time.Hour)),
 	}
-	cache := &schedulerTestGatewayCache{sessionBindings: map[string]int64{"openai:fractional-sticky-session": sticky.ID}}
+	cache := &schedulerTestGatewayCache{sessionBindings: map[string]int64{"openai:one-percent-sticky-session": sticky.ID}}
 	svc := &OpenAIGatewayService{
 		accountRepo:        schedulerTestOpenAIAccountRepo{accounts: []Account{sticky, other}},
 		cache:              cache,
@@ -199,7 +212,7 @@ func TestOpenAIAdvancedSchedulerReturnsToStickyAfterFractionalUsage(t *testing.T
 	}
 
 	selection, decision, err := svc.SelectAccountWithScheduler(
-		context.Background(), &groupID, "", "fractional-sticky-session", "gpt-5.6-sol", nil,
+		context.Background(), &groupID, "", "one-percent-sticky-session", "gpt-5.6-sol", nil,
 		OpenAIUpstreamTransportAny, false,
 	)
 	require.NoError(t, err)
@@ -220,7 +233,7 @@ func TestOpenAILegacySchedulerReturnsToStickyAfterWarmup(t *testing.T) {
 	other := Account{
 		ID: 74022, Platform: PlatformOpenAI, Type: AccountTypeOAuth,
 		Status: StatusActive, Schedulable: true, Concurrency: 1, GroupIDs: []int64{groupID},
-		Extra: openAIWeeklyUsageExtra(0.01, now.Add(7*24*time.Hour)),
+		Extra: openAIWeeklyUsageExtra(1, now.Add(7*24*time.Hour)),
 	}
 	cache := &schedulerTestGatewayCache{sessionBindings: map[string]int64{"openai:sticky-session": sticky.ID}}
 	cfg := &config.Config{}

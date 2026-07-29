@@ -10,6 +10,9 @@ import (
 
 const (
 	weeklyWarmupRefreshInterval = 2 * time.Minute
+	// Weekly usage remains in warm-up until the provider reports at least 1%.
+	// Keep this threshold centralized so scheduler paths cannot drift apart.
+	weeklyWarmupMinimumUsedPercent = 1.0
 
 	antigravityGeminiWeeklyUsedPercentKey = "antigravity_gemini_weekly_used_percent"
 	antigravityGeminiWeeklyResetAtKey     = "antigravity_gemini_weekly_reset_at"
@@ -50,7 +53,7 @@ func weeklyWarmupUtilization(account *Account, requestedModel string, now time.T
 
 func isWeeklyWarmupAccount(account *Account, requestedModel string, now time.Time) bool {
 	utilization, known := weeklyWarmupUtilization(account, requestedModel, now)
-	return known && utilization <= 0
+	return known && utilization < weeklyWarmupMinimumUsedPercent
 }
 
 func partitionWeeklyWarmupAccounts(accounts []*Account, requestedModel string, now time.Time) ([]*Account, []*Account) {

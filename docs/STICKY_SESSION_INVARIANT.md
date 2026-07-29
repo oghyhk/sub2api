@@ -22,11 +22,11 @@ account selection, or weekly-usage scheduling must preserve these rules.
 
 ## Weekly usage-bar warm-up
 
-- The seven-day warm-up policy remains active for known zero-percent weekly-use
-  candidates. It is a scheduling rule, not a reason to discard an established
+- The seven-day warm-up policy remains active for known weekly-use candidates
+  below `1%`. It is a scheduling rule, not a reason to discard an established
   sticky conversation.
-- A positive fractional weekly usage (for example `0.01%`) means the account has
-  warmed up and returns to normal sticky-session scheduling.
+- Usage at or above `1%` means the account has warmed up and returns to normal
+  sticky-session scheduling. Values such as `0.01%` remain in warm-up.
 - Changes to sticky-session recovery must not disable, shortcut, or reinterpret
   this policy. The regression test `TestAntigravityWeeklyWarmupOverridesThenRestoresSticky`
   protects this boundary.

@@ -131,6 +131,35 @@ func TestBuildGeminiDigestChain(t *testing.T) {
 	}
 }
 
+func TestBuildGeminiDigestChainIgnoresAccountScopedThoughtSignature(t *testing.T) {
+	base := &antigravity.GeminiRequest{
+		Contents: []antigravity.GeminiContent{
+			{Role: "user", Parts: []antigravity.GeminiPart{{Text: "Use the weather tool"}}},
+			{Role: "model", Parts: []antigravity.GeminiPart{{
+				Thought:          true,
+				Text:             "I should check the weather.",
+				ThoughtSignature: "signature-from-account-2",
+			}}},
+			{Role: "user", Parts: []antigravity.GeminiPart{{Text: "Continue"}}},
+		},
+	}
+	rotated := &antigravity.GeminiRequest{
+		Contents: []antigravity.GeminiContent{
+			{Role: "user", Parts: []antigravity.GeminiPart{{Text: "Use the weather tool"}}},
+			{Role: "model", Parts: []antigravity.GeminiPart{{
+				Thought:          true,
+				Text:             "I should check the weather.",
+				ThoughtSignature: "signature-from-account-8",
+			}}},
+			{Role: "user", Parts: []antigravity.GeminiPart{{Text: "Continue"}}},
+		},
+	}
+
+	if got, want := BuildGeminiDigestChain(rotated), BuildGeminiDigestChain(base); got != want {
+		t.Fatalf("account-scoped thought signatures must not split a sticky conversation: got %q, want %q", got, want)
+	}
+}
+
 func TestGenerateGeminiPrefixHash(t *testing.T) {
 	hash1 := GenerateGeminiPrefixHash(1, 100, "192.168.1.1", "Mozilla/5.0", "antigravity", "gemini-2.5-pro")
 	hash2 := GenerateGeminiPrefixHash(1, 100, "192.168.1.1", "Mozilla/5.0", "antigravity", "gemini-2.5-pro")
@@ -167,6 +196,47 @@ func TestGenerateGeminiPrefixHash_IgnoresFreeformUserAgentVersionNoise(t *testin
 
 	if hash1 != hash2 {
 		t.Fatalf("free-form version-only User-Agent changes should not perturb Gemini prefix hash: %s vs %s", hash1, hash2)
+	}
+}
+
+func TestGenerateGeminiPrefixHash_IgnoresProxyEdgeIP(t *testing.T) {
+	// Cloudflare and similar reverse proxies may present a different egress IP on
+	// every request in one conversation. Digest fallback must survive that change.
+	hash1 := GenerateGeminiPrefixHash(1, 100, "172.70.207.194", "WorkBuddy/5.3.5", "antigravity", "gemini-3.6-flash")
+	hash2 := GenerateGeminiPrefixHash(1, 100, "104.23.251.6", "WorkBuddy/5.3.5", "antigravity", "gemini-3.6-flash")
+
+	if hash1 != hash2 {
+		t.Fatalf("proxy edge IP changes must not perturb Gemini digest namespace: %s vs %s", hash1, hash2)
+	}
+}
+
+func TestGeminiDigestFallbackSurvivesProxyAndSignatureChange(t *testing.T) {
+	// This is the production regression that previously caused a live conversation
+	// to jump accounts: Cloudflare changed its edge IP while the upstream account
+	// changed the thoughtSignature attached to the same model message.
+	requestBeforeRotation := &antigravity.GeminiRequest{
+		Contents: []antigravity.GeminiContent{
+			{Role: "user", Parts: []antigravity.GeminiPart{{Text: "Summarize the incident"}}},
+			{Role: "model", Parts: []antigravity.GeminiPart{{Text: "Working on it", Thought: true, ThoughtSignature: "account-3-signature"}}},
+			{Role: "user", Parts: []antigravity.GeminiPart{{Text: "Continue"}}},
+		},
+	}
+	requestAfterRotation := &antigravity.GeminiRequest{
+		Contents: []antigravity.GeminiContent{
+			{Role: "user", Parts: []antigravity.GeminiPart{{Text: "Summarize the incident"}}},
+			{Role: "model", Parts: []antigravity.GeminiPart{{Text: "Working on it", Thought: true, ThoughtSignature: "account-8-signature"}}},
+			{Role: "user", Parts: []antigravity.GeminiPart{{Text: "Continue"}}},
+		},
+	}
+
+	prefixBefore := GenerateGeminiPrefixHash(1, 3, "172.70.207.194", "WorkBuddy/5.3.5", "antigravity", "gemini-3.6-flash")
+	prefixAfter := GenerateGeminiPrefixHash(1, 3, "104.23.251.6", "WorkBuddy/5.3.5", "antigravity", "gemini-3.6-flash")
+	store := NewDigestSessionStore()
+	store.Save(2, prefixBefore, BuildGeminiDigestChain(requestBeforeRotation), "session-uuid", 3, "")
+
+	_, accountID, _, found := store.Find(2, prefixAfter, BuildGeminiDigestChain(requestAfterRotation))
+	if !found || accountID != 3 {
+		t.Fatalf("sticky digest fallback must retain account 3 after proxy/signature changes; found=%v account=%d", found, accountID)
 	}
 }
 

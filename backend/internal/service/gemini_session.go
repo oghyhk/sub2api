@@ -18,8 +18,19 @@ func shortHash(data []byte) string {
 	return strconv.FormatUint(h, 36)
 }
 
-// BuildGeminiDigestChain 根据 Gemini 请求生成摘要链
-// 格式: s:<hash>-u:<hash>-m:<hash>-u:<hash>-...
+// BuildGeminiDigestChain builds a stable, privacy-preserving conversation identity
+// for native Gemini sticky-session recovery.
+//
+// STICKY-SESSION INVARIANT:
+//   - This digest identifies the logical conversation, not a particular upstream
+//     account. Therefore it MUST NOT include account-scoped transport fields such
+//     as thoughtSignature. Those signatures are regenerated whenever a request is
+//     safely moved to another Google account.
+//   - Message text, tool calls, tool responses, images, and thought markers remain
+//     part of the digest. Removing any of those would let different conversations
+//     collide and incorrectly inherit one another's account binding.
+//
+// Format: s:<hash>-u:<hash>-m:<hash>-u:<hash>-...
 // s = systemInstruction, u = user, m = model
 func BuildGeminiDigestChain(req *antigravity.GeminiRequest) string {
 	if req == nil {
@@ -30,7 +41,7 @@ func BuildGeminiDigestChain(req *antigravity.GeminiRequest) string {
 
 	// 1. system instruction
 	if req.SystemInstruction != nil && len(req.SystemInstruction.Parts) > 0 {
-		partsData, _ := json.Marshal(req.SystemInstruction.Parts)
+		partsData, _ := json.Marshal(canonicalGeminiPartsForDigest(req.SystemInstruction.Parts))
 		parts = append(parts, "s:"+shortHash(partsData))
 	}
 
@@ -40,22 +51,40 @@ func BuildGeminiDigestChain(req *antigravity.GeminiRequest) string {
 		if c.Role == "model" {
 			prefix = "m"
 		}
-		partsData, _ := json.Marshal(c.Parts)
+		partsData, _ := json.Marshal(canonicalGeminiPartsForDigest(c.Parts))
 		parts = append(parts, prefix+":"+shortHash(partsData))
 	}
 
 	return strings.Join(parts, "-")
 }
 
-// GenerateGeminiPrefixHash 生成前缀 hash（用于分区隔离）
-// 组合: userID + apiKeyID + ip + userAgent + platform + model
+// canonicalGeminiPartsForDigest removes only fields that are tied to an upstream
+// account instead of the logical conversation. Keep this deliberately narrow: it
+// is the last-resort binding used when the primary sticky cache misses.
+func canonicalGeminiPartsForDigest(parts []antigravity.GeminiPart) []antigravity.GeminiPart {
+	canonical := make([]antigravity.GeminiPart, len(parts))
+	copy(canonical, parts)
+	for i := range canonical {
+		canonical[i].ThoughtSignature = ""
+	}
+	return canonical
+}
+
+// GenerateGeminiPrefixHash generates a stable digest-store namespace.
+//
+// Do not reintroduce the observed client IP here. Public clients commonly arrive
+// through Cloudflare or another reverse proxy whose egress IP changes between
+// turns. Including it makes the digest fallback miss and can break an otherwise
+// sticky conversation. API-key identity, normalized user agent, platform, and
+// model provide the required isolation without depending on network topology.
+//
+// 组合: userID + apiKeyID + userAgent + platform + model
 // 返回 16 字符的 Base64 编码的 SHA256 前缀
-func GenerateGeminiPrefixHash(userID, apiKeyID int64, ip, userAgent, platform, model string) string {
+func GenerateGeminiPrefixHash(userID, apiKeyID int64, _ string, userAgent, platform, model string) string {
 	// 组合所有标识符
 	normalizedUserAgent := NormalizeSessionUserAgent(userAgent)
 	combined := strconv.FormatInt(userID, 10) + ":" +
 		strconv.FormatInt(apiKeyID, 10) + ":" +
-		ip + ":" +
 		normalizedUserAgent + ":" +
 		platform + ":" +
 		model

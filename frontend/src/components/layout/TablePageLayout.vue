@@ -1,5 +1,5 @@
 <template>
-  <div class="table-page-layout" :class="{ 'mobile-mode': isMobile }">
+  <div class="table-page-layout" :class="{ 'mobile-mode': isMobile, 'scrollable-mode': scrollable }">
     <!-- 固定区域：操作按钮 -->
     <div v-if="$slots.actions" class="layout-section-fixed">
       <slot name="actions" />
@@ -26,6 +26,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
+
+defineProps<{
+  scrollable?: boolean
+}>()
 
 const isMobile = ref(false)
 
@@ -89,6 +93,27 @@ onUnmounted(() => {
 
 .table-scroll-container :deep(td) {
   @apply px-5 py-4 text-sm text-gray-700 dark:text-gray-300 border-b border-gray-100 dark:border-dark-800;
+}
+
+/* Scrollable mode: the whole page scrolls, table gets a min-height */
+.table-page-layout.scrollable-mode {
+  height: auto;
+  min-height: calc(100vh - 64px - 4rem);
+  overflow-y: auto;
+}
+
+.table-page-layout.scrollable-mode .layout-section-scrollable {
+  @apply flex-none;
+}
+
+.table-page-layout.scrollable-mode .table-scroll-container {
+  @apply h-auto;
+  min-height: 540px; /* ~3 account rows with header */
+}
+
+.table-page-layout.scrollable-mode .table-scroll-container :deep(.table-wrapper) {
+  @apply overflow-x-auto;
+  overflow-y: visible;
 }
 
 /* 移动端：恢复正常滚动 */

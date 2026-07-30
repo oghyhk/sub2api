@@ -347,6 +347,8 @@ export default {
         fiveHourWindow: '5 小时窗口 (均值)',
         sevenDayWindow: '7 天窗口 (均值)',
         sampleCount: '已采样 {count} 个',
+        resetClosest: '最早重置',
+        resetLatest: '最晚重置',
         unavailable: '暂无数据',
         explanationTooltip: '百分比表示所有符合条件的 Antigravity OAuth 账号算术平均使用率。'
       },

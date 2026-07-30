@@ -1164,6 +1164,8 @@ export interface AccountUsageInfo {
 export interface AggregateUsageWindow {
   utilization: number | null
   sample_count: number
+  closest_reset_at?: string | null
+  latest_reset_at?: string | null
 }
 
 export interface AntigravityUsageSummary {

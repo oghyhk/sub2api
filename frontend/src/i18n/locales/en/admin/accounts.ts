@@ -1281,6 +1281,8 @@ export default {
         fiveHourWindow: '5h Window (Avg)',
         sevenDayWindow: '7d Window (Avg)',
         sampleCount: '{count} sampled',
+        resetClosest: 'Closest reset',
+        resetLatest: 'Latest reset',
         unavailable: 'N/A',
         explanationTooltip: 'Percentages represent the arithmetic mean utilization across all eligible Antigravity OAuth accounts.'
       },

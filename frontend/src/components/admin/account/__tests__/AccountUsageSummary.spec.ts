@@ -25,14 +25,34 @@ describe('AccountUsageSummary.vue', () => {
   const mockSummary: AntigravityUsageSummary = {
     eligible_accounts: 10,
     failed_accounts: 1,
-    gemini_5h: { utilization: 42.5, sample_count: 9 },
-    gemini_7d: { utilization: 15.0, sample_count: 9 },
-    claude_5h: { utilization: 88.0, sample_count: 8 },
-    claude_7d: { utilization: null, sample_count: 0 },
+    gemini_5h: {
+      utilization: 42.5,
+      sample_count: 9,
+      closest_reset_at: '2026-07-30T16:00:00Z',
+      latest_reset_at: '2026-07-30T18:00:00Z'
+    },
+    gemini_7d: {
+      utilization: 15.0,
+      sample_count: 9,
+      closest_reset_at: '2026-08-01T10:00:00Z',
+      latest_reset_at: '2026-08-05T10:00:00Z'
+    },
+    claude_5h: {
+      utilization: 88.0,
+      sample_count: 8,
+      closest_reset_at: '2026-07-30T17:00:00Z',
+      latest_reset_at: '2026-07-30T19:00:00Z'
+    },
+    claude_7d: {
+      utilization: null,
+      sample_count: 0,
+      closest_reset_at: null,
+      latest_reset_at: null
+    },
     updated_at: '2026-07-30T15:00:00Z'
   }
 
-  it('renders four stable bar positions with provider grouping', () => {
+  it('renders four stable bar positions with provider grouping and 8 reset countdowns', () => {
     const wrapper = mount(AccountUsageSummary, {
       props: {
         summary: mockSummary,
@@ -59,6 +79,12 @@ describe('AccountUsageSummary.vue', () => {
     // Claude 7d: null (unavailable state, preserved position)
     expect(progressBars[3].attributes('aria-valuenow')).toBe('0')
     expect(wrapper.text()).toContain('admin.accounts.summary.unavailable')
+
+    // Verify resetClosest and resetLatest labels appear 4 times each (total 8 reset countdowns)
+    const closestMatches = wrapper.text().match(/admin\.accounts\.summary\.resetClosest/g)
+    const latestMatches = wrapper.text().match(/admin\.accounts\.summary\.resetLatest/g)
+    expect(closestMatches?.length).toBe(4)
+    expect(latestMatches?.length).toBe(4)
   })
 
   it('renders loading state with skeletons', () => {
@@ -95,10 +121,10 @@ describe('AccountUsageSummary.vue', () => {
     const emptySummary: AntigravityUsageSummary = {
       eligible_accounts: 0,
       failed_accounts: 0,
-      gemini_5h: { utilization: null, sample_count: 0 },
-      gemini_7d: { utilization: null, sample_count: 0 },
-      claude_5h: { utilization: null, sample_count: 0 },
-      claude_7d: { utilization: null, sample_count: 0 },
+      gemini_5h: { utilization: null, sample_count: 0, closest_reset_at: null, latest_reset_at: null },
+      gemini_7d: { utilization: null, sample_count: 0, closest_reset_at: null, latest_reset_at: null },
+      claude_5h: { utilization: null, sample_count: 0, closest_reset_at: null, latest_reset_at: null },
+      claude_7d: { utilization: null, sample_count: 0, closest_reset_at: null, latest_reset_at: null },
       updated_at: '2026-07-30T15:00:00Z'
     }
 

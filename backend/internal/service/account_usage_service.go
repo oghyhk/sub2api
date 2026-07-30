@@ -120,8 +120,10 @@ const (
 
 // AggregateUsageWindow 单个用量窗口的聚合数据
 type AggregateUsageWindow struct {
-	Utilization *float64 `json:"utilization"` // 0-100 使用率均值，未提供时为 nil
-	SampleCount int      `json:"sample_count"`
+	Utilization    *float64 `json:"utilization"`      // 0-100 使用率均值，未提供时为 nil
+	SampleCount    int      `json:"sample_count"`
+	ClosestResetAt *string  `json:"closest_reset_at"` // ISO8601 最早重置时间
+	LatestResetAt  *string  `json:"latest_reset_at"`  // ISO8601 最晚重置时间
 }
 
 // AntigravityUsageSummary Antigravity OAuth 账号的全局用量聚合摘要
@@ -1698,11 +1700,11 @@ func buildGeminiUsageProgress(used, limit int64, resetAt time.Time, tokens int64
 	}
 }
 
-// ExtractAntigravityBucketUtilization 从 AntigravityQuota 中提取指定模型列表中最高的 utilization。
-// 如果没有任何模型匹配，返回 (0, false)。
-func ExtractAntigravityBucketUtilization(quota map[string]*AntigravityModelQuota, modelNames []string) (float64, bool) {
+// ExtractAntigravityBucketUtilization 从 AntigravityQuota 中提取指定模型列表中最高的 utilization 与最早的 reset_time。
+// 如果没有任何模型匹配，返回 (0, "", false)。
+func ExtractAntigravityBucketUtilization(quota map[string]*AntigravityModelQuota, modelNames []string) (float64, string, bool) {
 	if len(quota) == 0 {
-		return 0, false
+		return 0, "", false
 	}
 	var maxUtilization float64
 	var earliestReset string
@@ -1726,15 +1728,15 @@ func ExtractAntigravityBucketUtilization(quota map[string]*AntigravityModelQuota
 	}
 
 	if !found {
-		return 0, false
+		return 0, "", false
 	}
-	return maxUtilization, true
+	return maxUtilization, earliestReset, true
 }
 
-func ExtractGemini5hUtilization(quota map[string]*AntigravityModelQuota) (float64, bool) {
+func ExtractGemini5hUtilization(quota map[string]*AntigravityModelQuota) (float64, string, bool) {
 	canonicalModels := []string{"gemini-5h", "gemini:5h"}
-	if util, ok := ExtractAntigravityBucketUtilization(quota, canonicalModels); ok {
-		return util, true
+	if util, resetAt, ok := ExtractAntigravityBucketUtilization(quota, canonicalModels); ok {
+		return util, resetAt, true
 	}
 	fallbackModels := []string{
 		"gemini-pro-agent", "gemini-3.1-pro-high", "gemini-3.1-pro-low",
@@ -1744,15 +1746,15 @@ func ExtractGemini5hUtilization(quota map[string]*AntigravityModelQuota) (float6
 	return ExtractAntigravityBucketUtilization(quota, fallbackModels)
 }
 
-func ExtractGemini7dUtilization(quota map[string]*AntigravityModelQuota) (float64, bool) {
+func ExtractGemini7dUtilization(quota map[string]*AntigravityModelQuota) (float64, string, bool) {
 	canonicalModels := []string{"gemini-weekly", "gemini:weekly"}
 	return ExtractAntigravityBucketUtilization(quota, canonicalModels)
 }
 
-func ExtractClaude5hUtilization(quota map[string]*AntigravityModelQuota) (float64, bool) {
+func ExtractClaude5hUtilization(quota map[string]*AntigravityModelQuota) (float64, string, bool) {
 	canonicalModels := []string{"3p-5h", "claude:5h"}
-	if util, ok := ExtractAntigravityBucketUtilization(quota, canonicalModels); ok {
-		return util, true
+	if util, resetAt, ok := ExtractAntigravityBucketUtilization(quota, canonicalModels); ok {
+		return util, resetAt, true
 	}
 	fallbackModels := []string{
 		"claude-fable-5", "claude-sonnet-4-5", "claude-opus-4-5-thinking",
@@ -1762,7 +1764,7 @@ func ExtractClaude5hUtilization(quota map[string]*AntigravityModelQuota) (float6
 	return ExtractAntigravityBucketUtilization(quota, fallbackModels)
 }
 
-func ExtractClaude7dUtilization(quota map[string]*AntigravityModelQuota) (float64, bool) {
+func ExtractClaude7dUtilization(quota map[string]*AntigravityModelQuota) (float64, string, bool) {
 	canonicalModels := []string{"3p-weekly", "claude:weekly"}
 	return ExtractAntigravityBucketUtilization(quota, canonicalModels)
 }
@@ -1879,6 +1881,7 @@ func (s *AccountUsageService) computeAntigravityUsageSummary(ctx context.Context
 	var failedCount int
 	var gemini5hSum, gemini7dSum, claude5hSum, claude7dSum float64
 	var gemini5hCount, gemini7dCount, claude5hCount, claude7dCount int
+	var gemini5hResets, gemini7dResets, claude5hResets, claude7dResets []string
 
 	for _, res := range results {
 		if res.err != nil || res.usage == nil || res.usage.Error != "" {
@@ -1891,29 +1894,43 @@ func (s *AccountUsageService) computeAntigravityUsageSummary(ctx context.Context
 			continue
 		}
 
-		if util, ok := ExtractGemini5hUtilization(quota); ok {
+		if util, resetAt, ok := ExtractGemini5hUtilization(quota); ok {
 			gemini5hSum += util
 			gemini5hCount++
+			if resetAt != "" {
+				gemini5hResets = append(gemini5hResets, resetAt)
+			}
 		}
-		if util, ok := ExtractGemini7dUtilization(quota); ok {
+		if util, resetAt, ok := ExtractGemini7dUtilization(quota); ok {
 			gemini7dSum += util
 			gemini7dCount++
+			if resetAt != "" {
+				gemini7dResets = append(gemini7dResets, resetAt)
+			}
 		}
-		if util, ok := ExtractClaude5hUtilization(quota); ok {
+		if util, resetAt, ok := ExtractClaude5hUtilization(quota); ok {
 			claude5hSum += util
 			claude5hCount++
+			if resetAt != "" {
+				claude5hResets = append(claude5hResets, resetAt)
+			}
 		}
-		if util, ok := ExtractClaude7dUtilization(quota); ok {
+		if util, resetAt, ok := ExtractClaude7dUtilization(quota); ok {
 			claude7dSum += util
 			claude7dCount++
+			if resetAt != "" {
+				claude7dResets = append(claude7dResets, resetAt)
+			}
 		}
 	}
 
-	makeWindow := func(sum float64, count int) *AggregateUsageWindow {
+	makeWindow := func(sum float64, count int, resets []string) *AggregateUsageWindow {
 		if count == 0 {
 			return &AggregateUsageWindow{
-				Utilization: nil,
-				SampleCount: 0,
+				Utilization:    nil,
+				SampleCount:    0,
+				ClosestResetAt: nil,
+				LatestResetAt:  nil,
 			}
 		}
 		mean := sum / float64(count)
@@ -1923,9 +1940,47 @@ func (s *AccountUsageService) computeAntigravityUsageSummary(ctx context.Context
 			mean = 100
 		}
 		mean = math.Round(mean*10) / 10
+
+		var closest, latest *string
+		if len(resets) > 0 {
+			var minT, maxT time.Time
+			var minStr, maxStr string
+			parsedCount := 0
+
+			for _, r := range resets {
+				tVal, err := time.Parse(time.RFC3339, r)
+				if err != nil {
+					if parsedCount == 0 || r < minStr {
+						minStr = r
+					}
+					if parsedCount == 0 || r > maxStr {
+						maxStr = r
+					}
+					parsedCount++
+					continue
+				}
+				if parsedCount == 0 || tVal.Before(minT) {
+					minT = tVal
+					minStr = r
+				}
+				if parsedCount == 0 || tVal.After(maxT) {
+					maxT = tVal
+					maxStr = r
+				}
+				parsedCount++
+			}
+
+			if parsedCount > 0 {
+				closest = &minStr
+				latest = &maxStr
+			}
+		}
+
 		return &AggregateUsageWindow{
-			Utilization: &mean,
-			SampleCount: count,
+			Utilization:    &mean,
+			SampleCount:    count,
+			ClosestResetAt: closest,
+			LatestResetAt:  latest,
 		}
 	}
 
@@ -1933,10 +1988,10 @@ func (s *AccountUsageService) computeAntigravityUsageSummary(ctx context.Context
 	return &AntigravityUsageSummary{
 		EligibleAccounts: totalEligible,
 		FailedAccounts:   failedCount,
-		Gemini5h:         makeWindow(gemini5hSum, gemini5hCount),
-		Gemini7d:         makeWindow(gemini7dSum, gemini7dCount),
-		Claude5h:         makeWindow(claude5hSum, claude5hCount),
-		Claude7d:         makeWindow(claude7dSum, claude7dCount),
+		Gemini5h:         makeWindow(gemini5hSum, gemini5hCount, gemini5hResets),
+		Gemini7d:         makeWindow(gemini7dSum, gemini7dCount, gemini7dResets),
+		Claude5h:         makeWindow(claude5hSum, claude5hCount, claude5hResets),
+		Claude7d:         makeWindow(claude7dSum, claude7dCount, claude7dResets),
 		UpdatedAt:        now,
 	}, nil
 }

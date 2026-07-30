@@ -115,6 +115,20 @@
                 :style="{ width: `${clampPercent(summary.gemini_5h.utilization)}%` }"
               ></div>
             </div>
+            <div class="mt-1 flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-[10px] text-gray-500 dark:text-gray-400">
+              <span class="inline-flex items-center gap-1">
+                <span>{{ t('admin.accounts.summary.resetClosest') }}:</span>
+                <span class="font-mono font-medium text-gray-700 dark:text-gray-300">
+                  {{ formatCountdown(summary.gemini_5h.closest_reset_at) }}
+                </span>
+              </span>
+              <span class="inline-flex items-center gap-1">
+                <span>{{ t('admin.accounts.summary.resetLatest') }}:</span>
+                <span class="font-mono font-medium text-gray-700 dark:text-gray-300">
+                  {{ formatCountdown(summary.gemini_5h.latest_reset_at) }}
+                </span>
+              </span>
+            </div>
           </div>
 
           <!-- Gemini 7d -->
@@ -143,6 +157,20 @@
                 :class="['h-full transition-all duration-500', getBarColorClass(summary.gemini_7d.utilization, 'emerald')]"
                 :style="{ width: `${clampPercent(summary.gemini_7d.utilization)}%` }"
               ></div>
+            </div>
+            <div class="mt-1 flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-[10px] text-gray-500 dark:text-gray-400">
+              <span class="inline-flex items-center gap-1">
+                <span>{{ t('admin.accounts.summary.resetClosest') }}:</span>
+                <span class="font-mono font-medium text-gray-700 dark:text-gray-300">
+                  {{ formatCountdown(summary.gemini_7d.closest_reset_at) }}
+                </span>
+              </span>
+              <span class="inline-flex items-center gap-1">
+                <span>{{ t('admin.accounts.summary.resetLatest') }}:</span>
+                <span class="font-mono font-medium text-gray-700 dark:text-gray-300">
+                  {{ formatCountdown(summary.gemini_7d.latest_reset_at) }}
+                </span>
+              </span>
             </div>
           </div>
         </div>
@@ -188,6 +216,20 @@
                 :style="{ width: `${clampPercent(summary.claude_5h.utilization)}%` }"
               ></div>
             </div>
+            <div class="mt-1 flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-[10px] text-gray-500 dark:text-gray-400">
+              <span class="inline-flex items-center gap-1">
+                <span>{{ t('admin.accounts.summary.resetClosest') }}:</span>
+                <span class="font-mono font-medium text-gray-700 dark:text-gray-300">
+                  {{ formatCountdown(summary.claude_5h.closest_reset_at) }}
+                </span>
+              </span>
+              <span class="inline-flex items-center gap-1">
+                <span>{{ t('admin.accounts.summary.resetLatest') }}:</span>
+                <span class="font-mono font-medium text-gray-700 dark:text-gray-300">
+                  {{ formatCountdown(summary.claude_5h.latest_reset_at) }}
+                </span>
+              </span>
+            </div>
           </div>
 
           <!-- Claude 7d -->
@@ -217,6 +259,20 @@
                 :style="{ width: `${clampPercent(summary.claude_7d.utilization)}%` }"
               ></div>
             </div>
+            <div class="mt-1 flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-[10px] text-gray-500 dark:text-gray-400">
+              <span class="inline-flex items-center gap-1">
+                <span>{{ t('admin.accounts.summary.resetClosest') }}:</span>
+                <span class="font-mono font-medium text-gray-700 dark:text-gray-300">
+                  {{ formatCountdown(summary.claude_7d.closest_reset_at) }}
+                </span>
+              </span>
+              <span class="inline-flex items-center gap-1">
+                <span>{{ t('admin.accounts.summary.resetLatest') }}:</span>
+                <span class="font-mono font-medium text-gray-700 dark:text-gray-300">
+                  {{ formatCountdown(summary.claude_7d.latest_reset_at) }}
+                </span>
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -225,7 +281,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { useIntervalFn } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import type { AntigravityUsageSummary } from '@/types'
 import Icon from '@/components/icons/Icon.vue'
@@ -242,6 +299,11 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
+const now = ref(new Date())
+useIntervalFn(() => {
+  now.value = new Date()
+}, 30_000)
+
 const formattedUpdatedAt = computed(() => {
   if (!props.summary?.updated_at) return ''
   try {
@@ -251,6 +313,29 @@ const formattedUpdatedAt = computed(() => {
     return props.summary.updated_at
   }
 })
+
+function formatCountdown(resetsAt?: string | null): string {
+  if (!resetsAt) return '-'
+  try {
+    const date = new Date(resetsAt)
+    const diffMs = date.getTime() - now.value.getTime()
+    if (diffMs <= 0) {
+      return t('usage.resetNow')
+    }
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+    const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
+    if (diffHours >= 24) {
+      const days = Math.floor(diffHours / 24)
+      return `${days}d ${diffHours % 24}h`
+    } else if (diffHours > 0) {
+      return `${diffHours}h ${diffMins}m`
+    } else {
+      return `${diffMins}m`
+    }
+  } catch {
+    return '-'
+  }
+}
 
 function clampPercent(val: number | null): number {
   if (val === null || val === undefined) return 0

@@ -18,9 +18,10 @@ func TestExtractAntigravityBucketUtilization(t *testing.T) {
 			"gemini-5h":        {Utilization: 30, ResetTime: "2026-03-01T10:00:00Z"},
 			"gemini-pro-agent": {Utilization: 80, ResetTime: "2026-03-01T12:00:00Z"},
 		}
-		util, ok := ExtractGemini5hUtilization(quotaCanonical)
+		util, resetAt, ok := ExtractGemini5hUtilization(quotaCanonical)
 		assert.True(t, ok)
 		assert.Equal(t, 30.0, util)
+		assert.Equal(t, "2026-03-01T10:00:00Z", resetAt)
 
 		// Fallback uses maximum utilization across fallback models
 		quotaFallback := map[string]*AntigravityModelQuota{
@@ -28,7 +29,7 @@ func TestExtractAntigravityBucketUtilization(t *testing.T) {
 			"gemini-3.1-pro-high":  {Utilization: 75},
 			"gemini-3-flash-agent": {Utilization: 20},
 		}
-		util, ok = ExtractGemini5hUtilization(quotaFallback)
+		util, _, ok = ExtractGemini5hUtilization(quotaFallback)
 		assert.True(t, ok)
 		assert.Equal(t, 75.0, util)
 
@@ -36,7 +37,7 @@ func TestExtractAntigravityBucketUtilization(t *testing.T) {
 		quotaNone := map[string]*AntigravityModelQuota{
 			"unrelated-model": {Utilization: 50},
 		}
-		_, ok = ExtractGemini5hUtilization(quotaNone)
+		_, _, ok = ExtractGemini5hUtilization(quotaNone)
 		assert.False(t, ok)
 	})
 
@@ -45,7 +46,7 @@ func TestExtractAntigravityBucketUtilization(t *testing.T) {
 			"claude:5h":         {Utilization: 10},
 			"claude-sonnet-4-5": {Utilization: 90},
 		}
-		util, ok := ExtractClaude5hUtilization(quotaCanonical)
+		util, _, ok := ExtractClaude5hUtilization(quotaCanonical)
 		assert.True(t, ok)
 		assert.Equal(t, 10.0, util)
 
@@ -54,7 +55,7 @@ func TestExtractAntigravityBucketUtilization(t *testing.T) {
 			"claude-sonnet-4-5": {Utilization: 60},
 			"claude-opus-4-6":   {Utilization: 40},
 		}
-		util, ok = ExtractClaude5hUtilization(quotaFallback)
+		util, _, ok = ExtractClaude5hUtilization(quotaFallback)
 		assert.True(t, ok)
 		assert.Equal(t, 60.0, util)
 	})
@@ -64,11 +65,11 @@ func TestExtractAntigravityBucketUtilization(t *testing.T) {
 			"gemini-weekly": {Utilization: 15},
 			"3p-weekly":     {Utilization: 85},
 		}
-		utilGem, okGem := ExtractGemini7dUtilization(quota)
+		utilGem, _, okGem := ExtractGemini7dUtilization(quota)
 		assert.True(t, okGem)
 		assert.Equal(t, 15.0, utilGem)
 
-		utilClaude, okClaude := ExtractClaude7dUtilization(quota)
+		utilClaude, _, okClaude := ExtractClaude7dUtilization(quota)
 		assert.True(t, okClaude)
 		assert.Equal(t, 85.0, utilClaude)
 	})
@@ -286,10 +287,10 @@ func TestGetAntigravityUsageSummary(t *testing.T) {
 		cache.antigravityCache.Store(int64(1), &antigravityUsageCache{
 			usageInfo: &UsageInfo{
 				AntigravityQuota: map[string]*AntigravityModelQuota{
-					"gemini-5h":     {Utilization: 20},
-					"gemini-weekly": {Utilization: 10},
-					"3p-5h":         {Utilization: 50},
-					"3p-weekly":     {Utilization: 30},
+					"gemini-5h":     {Utilization: 20, ResetTime: "2026-07-30T10:00:00Z"},
+					"gemini-weekly": {Utilization: 10, ResetTime: "2026-08-01T10:00:00Z"},
+					"3p-5h":         {Utilization: 50, ResetTime: "2026-07-30T12:00:00Z"},
+					"3p-weekly":     {Utilization: 30, ResetTime: "2026-08-02T12:00:00Z"},
 				},
 			},
 			timestamp: time.Now(),
@@ -297,10 +298,10 @@ func TestGetAntigravityUsageSummary(t *testing.T) {
 		cache.antigravityCache.Store(int64(2), &antigravityUsageCache{
 			usageInfo: &UsageInfo{
 				AntigravityQuota: map[string]*AntigravityModelQuota{
-					"gemini-5h":     {Utilization: 40},
-					"gemini-weekly": {Utilization: 20},
-					"3p-5h":         {Utilization: 70},
-					"3p-weekly":     {Utilization: 40},
+					"gemini-5h":     {Utilization: 40, ResetTime: "2026-07-30T11:00:00Z"},
+					"gemini-weekly": {Utilization: 20, ResetTime: "2026-08-03T10:00:00Z"},
+					"3p-5h":         {Utilization: 70, ResetTime: "2026-07-30T14:00:00Z"},
+					"3p-weekly":     {Utilization: 40, ResetTime: "2026-08-05T12:00:00Z"},
 				},
 			},
 			timestamp: time.Now(),
@@ -315,8 +316,8 @@ func TestGetAntigravityUsageSummary(t *testing.T) {
 		cache.antigravityCache.Store(int64(4), &antigravityUsageCache{
 			usageInfo: &UsageInfo{
 				AntigravityQuota: map[string]*AntigravityModelQuota{
-					"gemini-5h":     {Utilization: 60},
-					"gemini-weekly": {Utilization: 30},
+					"gemini-5h":     {Utilization: 60, ResetTime: "2026-07-30T09:00:00Z"},
+					"gemini-weekly": {Utilization: 30, ResetTime: "2026-08-02T10:00:00Z"},
 					// 3p-5h and 3p-weekly missing for account 4
 				},
 			},
@@ -351,24 +352,40 @@ func TestGetAntigravityUsageSummary(t *testing.T) {
 		require.NotNil(t, summary.Gemini5h.Utilization)
 		assert.Equal(t, 40.0, *summary.Gemini5h.Utilization)
 		assert.Equal(t, 3, summary.Gemini5h.SampleCount)
+		require.NotNil(t, summary.Gemini5h.ClosestResetAt)
+		require.NotNil(t, summary.Gemini5h.LatestResetAt)
+		assert.Equal(t, "2026-07-30T09:00:00Z", *summary.Gemini5h.ClosestResetAt)
+		assert.Equal(t, "2026-07-30T11:00:00Z", *summary.Gemini5h.LatestResetAt)
 
 		// Gemini 7d: (10 + 20 + 30) / 3 = 20.0, sample_count = 3
 		require.NotNil(t, summary.Gemini7d)
 		require.NotNil(t, summary.Gemini7d.Utilization)
 		assert.Equal(t, 20.0, *summary.Gemini7d.Utilization)
 		assert.Equal(t, 3, summary.Gemini7d.SampleCount)
+		require.NotNil(t, summary.Gemini7d.ClosestResetAt)
+		require.NotNil(t, summary.Gemini7d.LatestResetAt)
+		assert.Equal(t, "2026-08-01T10:00:00Z", *summary.Gemini7d.ClosestResetAt)
+		assert.Equal(t, "2026-08-03T10:00:00Z", *summary.Gemini7d.LatestResetAt)
 
 		// Claude 5h: (50 + 70) / 2 = 60.0, sample_count = 2
 		require.NotNil(t, summary.Claude5h)
 		require.NotNil(t, summary.Claude5h.Utilization)
 		assert.Equal(t, 60.0, *summary.Claude5h.Utilization)
 		assert.Equal(t, 2, summary.Claude5h.SampleCount)
+		require.NotNil(t, summary.Claude5h.ClosestResetAt)
+		require.NotNil(t, summary.Claude5h.LatestResetAt)
+		assert.Equal(t, "2026-07-30T12:00:00Z", *summary.Claude5h.ClosestResetAt)
+		assert.Equal(t, "2026-07-30T14:00:00Z", *summary.Claude5h.LatestResetAt)
 
 		// Claude 7d: (30 + 40) / 2 = 35.0, sample_count = 2
 		require.NotNil(t, summary.Claude7d)
 		require.NotNil(t, summary.Claude7d.Utilization)
 		assert.Equal(t, 35.0, *summary.Claude7d.Utilization)
 		assert.Equal(t, 2, summary.Claude7d.SampleCount)
+		require.NotNil(t, summary.Claude7d.ClosestResetAt)
+		require.NotNil(t, summary.Claude7d.LatestResetAt)
+		assert.Equal(t, "2026-08-02T12:00:00Z", *summary.Claude7d.ClosestResetAt)
+		assert.Equal(t, "2026-08-05T12:00:00Z", *summary.Claude7d.LatestResetAt)
 	})
 
 	t.Run("All windows missing returns null utilization and sample count 0", func(t *testing.T) {

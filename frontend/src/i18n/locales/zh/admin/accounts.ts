@@ -335,6 +335,21 @@ export default {
           unavailableDesc: '服务不可用 - 暂停 30 分钟'
         }
       },
+      summary: {
+        title: 'Antigravity OAuth 汇总用量',
+        sampledAccounts: '{count} 个可调度账号',
+        failedAccounts: '{count} 个获取失败',
+        updatedAt: '更新于 {time}',
+        refresh: '刷新用量汇总',
+        retry: '重试',
+        noEligibleAccounts: '未找到可调度的 Antigravity OAuth 账号。',
+        providerSubtitle: '已采样账号的平均使用率',
+        fiveHourWindow: '5 小时窗口 (均值)',
+        sevenDayWindow: '7 天窗口 (均值)',
+        sampleCount: '已采样 {count} 个',
+        unavailable: '暂无数据',
+        explanationTooltip: '百分比表示所有符合条件的 Antigravity OAuth 账号算术平均使用率。'
+      },
       usageWindow: {
         statsTitle: '5小时窗口用量统计',
         statsTitleDaily: '每日用量统计',

@@ -1269,6 +1269,21 @@ export default {
         usageTrend: '30-Day Cost & Request Trend',
         noData: 'No usage data available for this account'
       },
+      summary: {
+        title: 'Antigravity OAuth Aggregate Usage',
+        sampledAccounts: '{count} eligible accounts',
+        failedAccounts: '{count} failed',
+        updatedAt: 'Updated {time}',
+        refresh: 'Refresh usage summary',
+        retry: 'Retry',
+        noEligibleAccounts: 'No schedulable Antigravity OAuth accounts found.',
+        providerSubtitle: 'Average utilization across sampled accounts',
+        fiveHourWindow: '5h Window (Avg)',
+        sevenDayWindow: '7d Window (Avg)',
+        sampleCount: '{count} sampled',
+        unavailable: 'N/A',
+        explanationTooltip: 'Percentages represent the arithmetic mean utilization across all eligible Antigravity OAuth accounts.'
+      },
       usageWindow: {
         statsTitle: '5-Hour Window Usage Statistics',
         statsTitleDaily: 'Daily Usage Statistics',

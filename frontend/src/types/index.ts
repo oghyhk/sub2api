@@ -1161,6 +1161,21 @@ export interface AccountUsageInfo {
   error?: string            // usage 获取失败时的错误信息
 }
 
+export interface AggregateUsageWindow {
+  utilization: number | null
+  sample_count: number
+}
+
+export interface AntigravityUsageSummary {
+  eligible_accounts: number
+  failed_accounts: number
+  gemini_5h: AggregateUsageWindow
+  gemini_7d: AggregateUsageWindow
+  claude_5h: AggregateUsageWindow
+  claude_7d: AggregateUsageWindow
+  updated_at: string
+}
+
 // OpenAI Codex usage snapshot (from response headers)
 export interface CodexUsageSnapshot {
   // Legacy fields (kept for backwards compatibility)

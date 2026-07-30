@@ -22,7 +22,8 @@ import type {
   CheckMixedChannelRequest,
   CheckMixedChannelResponse,
   UpstreamBillingProbeResult,
-  UpstreamBillingProbeSettings
+  UpstreamBillingProbeSettings,
+  AntigravityUsageSummary
 } from '@/types'
 
 /**
@@ -882,6 +883,20 @@ export async function probeUpstreamBillingBatch(accountIds: number[]): Promise<U
   return data.results
 }
 
+/**
+ * Get aggregate usage summary for all eligible Antigravity OAuth accounts
+ * @param force - Whether to force a refresh bypassing short cache
+ * @returns Aggregate usage summary containing Gemini 5h/7d and Claude 5h/7d
+ */
+export async function getUsageSummary(force?: boolean): Promise<AntigravityUsageSummary> {
+  const params: Record<string, string> = {}
+  if (force) params.force = 'true'
+  const { data } = await apiClient.get<AntigravityUsageSummary>('/admin/accounts/usage-summary', {
+    params: Object.keys(params).length > 0 ? params : undefined
+  })
+  return data
+}
+
 export const accountsAPI = {
   list,
   listWithEtag,
@@ -933,7 +948,8 @@ export const accountsAPI = {
   updateUpstreamBillingProbeSettings,
   setUpstreamBillingProbeEnabled,
   probeUpstreamBilling,
-  probeUpstreamBillingBatch
+  probeUpstreamBillingBatch,
+  getUsageSummary
 }
 
 export default accountsAPI

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"log/slog"
+	"math"
 	"math/rand/v2"
 	"net/http"
 	"strings"
@@ -105,26 +106,67 @@ type antigravityUsageCache struct {
 }
 
 const (
-	apiCacheTTL             = 3 * time.Minute
-	apiErrorCacheTTL        = 1 * time.Minute        // 负缓存 TTL：429 等错误缓存 1 分钟
-	antigravityErrorTTL     = 1 * time.Minute        // Antigravity 错误缓存 TTL（可恢复错误）
-	apiQueryMaxJitter       = 800 * time.Millisecond // 用量查询最大随机延迟
-	windowStatsCacheTTL     = 1 * time.Minute
-	openAIProbeCacheTTL     = 10 * time.Minute
-	grokProbeRetryTTL       = 1 * time.Minute
-	grokFreeQuotaWindow     = 24 * time.Hour
-	openAICodexProbeVersion = "0.144.1"
+	apiCacheTTL                 = 3 * time.Minute
+	apiErrorCacheTTL            = 1 * time.Minute        // 负缓存 TTL：429 等错误缓存 1 分钟
+	antigravityErrorTTL         = 1 * time.Minute        // Antigravity 错误缓存 TTL（可恢复错误）
+	antigravitySummaryCacheTTL  = 30 * time.Second       // Antigravity 全局用量摘要缓存 30 秒
+	apiQueryMaxJitter           = 800 * time.Millisecond // 用量查询最大随机延迟
+	windowStatsCacheTTL         = 1 * time.Minute
+	openAIProbeCacheTTL         = 10 * time.Minute
+	grokProbeRetryTTL           = 1 * time.Minute
+	grokFreeQuotaWindow         = 24 * time.Hour
+	openAICodexProbeVersion     = "0.144.1"
 )
+
+// AggregateUsageWindow 单个用量窗口的聚合数据
+type AggregateUsageWindow struct {
+	Utilization *float64 `json:"utilization"` // 0-100 使用率均值，未提供时为 nil
+	SampleCount int      `json:"sample_count"`
+}
+
+// AntigravityUsageSummary Antigravity OAuth 账号的全局用量聚合摘要
+type AntigravityUsageSummary struct {
+	EligibleAccounts int                   `json:"eligible_accounts"`
+	FailedAccounts   int                   `json:"failed_accounts"`
+	Gemini5h         *AggregateUsageWindow `json:"gemini_5h"`
+	Gemini7d         *AggregateUsageWindow `json:"gemini_7d"`
+	Claude5h         *AggregateUsageWindow `json:"claude_5h"`
+	Claude7d         *AggregateUsageWindow `json:"claude_7d"`
+	UpdatedAt        time.Time             `json:"updated_at"`
+}
+
+type antigravitySummaryCache struct {
+	summary   *AntigravityUsageSummary
+	timestamp time.Time
+}
 
 // UsageCache 封装账户使用量相关的缓存
 type UsageCache struct {
-	apiCache          sync.Map           // accountID -> *apiUsageCache
-	windowStatsCache  sync.Map           // accountID -> *windowStatsCache
-	antigravityCache  sync.Map           // accountID -> *antigravityUsageCache
-	apiFlight         singleflight.Group // 防止同一账号的并发请求击穿缓存（Anthropic）
-	antigravityFlight singleflight.Group // 防止同一 Antigravity 账号的并发请求击穿缓存
-	openAIProbeCache  sync.Map           // accountID -> time.Time
-	grokProbeCache    sync.Map           // accountID -> last billing probe attempt
+	apiCache                 sync.Map           // accountID -> *apiUsageCache
+	windowStatsCache         sync.Map           // accountID -> *windowStatsCache
+	antigravityCache         sync.Map           // accountID -> *antigravityUsageCache
+	antigravitySummaryMu     sync.RWMutex
+	antigravitySummaryData   *antigravitySummaryCache
+	apiFlight                singleflight.Group // 防止同一账号的并发请求击穿缓存（Anthropic）
+	antigravityFlight        singleflight.Group // 防止同一 Antigravity 账号的并发请求击穿缓存
+	antigravitySummaryFlight singleflight.Group
+	openAIProbeCache         sync.Map           // accountID -> time.Time
+	grokProbeCache            sync.Map           // accountID -> last billing probe attempt
+}
+
+func (c *UsageCache) getAntigravitySummaryCache() *antigravitySummaryCache {
+	c.antigravitySummaryMu.RLock()
+	defer c.antigravitySummaryMu.RUnlock()
+	return c.antigravitySummaryData
+}
+
+func (c *UsageCache) setAntigravitySummaryCache(summary *AntigravityUsageSummary) {
+	c.antigravitySummaryMu.Lock()
+	defer c.antigravitySummaryMu.Unlock()
+	c.antigravitySummaryData = &antigravitySummaryCache{
+		summary:   summary,
+		timestamp: time.Now(),
+	}
 }
 
 // NewUsageCache 创建 UsageCache 实例
@@ -1654,6 +1696,249 @@ func buildGeminiUsageProgress(used, limit int64, resetAt time.Time, tokens int64
 			Cost:     cost,
 		},
 	}
+}
+
+// ExtractAntigravityBucketUtilization 从 AntigravityQuota 中提取指定模型列表中最高的 utilization。
+// 如果没有任何模型匹配，返回 (0, false)。
+func ExtractAntigravityBucketUtilization(quota map[string]*AntigravityModelQuota, modelNames []string) (float64, bool) {
+	if len(quota) == 0 {
+		return 0, false
+	}
+	var maxUtilization float64
+	var earliestReset string
+	found := false
+
+	for _, model := range modelNames {
+		modelQuota, ok := quota[model]
+		if !ok || modelQuota == nil {
+			continue
+		}
+		found = true
+		util := float64(modelQuota.Utilization)
+		if util > maxUtilization {
+			maxUtilization = util
+		}
+		if modelQuota.ResetTime != "" {
+			if earliestReset == "" || modelQuota.ResetTime < earliestReset {
+				earliestReset = modelQuota.ResetTime
+			}
+		}
+	}
+
+	if !found {
+		return 0, false
+	}
+	return maxUtilization, true
+}
+
+func ExtractGemini5hUtilization(quota map[string]*AntigravityModelQuota) (float64, bool) {
+	canonicalModels := []string{"gemini-5h", "gemini:5h"}
+	if util, ok := ExtractAntigravityBucketUtilization(quota, canonicalModels); ok {
+		return util, true
+	}
+	fallbackModels := []string{
+		"gemini-pro-agent", "gemini-3.1-pro-high", "gemini-3.1-pro-low",
+		"gemini-3-flash", "gemini-3-flash-agent", "gemini-3.6-flash-tiered",
+		"gemini-3.1-flash-image",
+	}
+	return ExtractAntigravityBucketUtilization(quota, fallbackModels)
+}
+
+func ExtractGemini7dUtilization(quota map[string]*AntigravityModelQuota) (float64, bool) {
+	canonicalModels := []string{"gemini-weekly", "gemini:weekly"}
+	return ExtractAntigravityBucketUtilization(quota, canonicalModels)
+}
+
+func ExtractClaude5hUtilization(quota map[string]*AntigravityModelQuota) (float64, bool) {
+	canonicalModels := []string{"3p-5h", "claude:5h"}
+	if util, ok := ExtractAntigravityBucketUtilization(quota, canonicalModels); ok {
+		return util, true
+	}
+	fallbackModels := []string{
+		"claude-fable-5", "claude-sonnet-4-5", "claude-opus-4-5-thinking",
+		"claude-sonnet-4-6", "claude-opus-4-6", "claude-opus-4-6-thinking",
+		"claude-opus-4-7", "claude-opus-4-8",
+	}
+	return ExtractAntigravityBucketUtilization(quota, fallbackModels)
+}
+
+func ExtractClaude7dUtilization(quota map[string]*AntigravityModelQuota) (float64, bool) {
+	canonicalModels := []string{"3p-weekly", "claude:weekly"}
+	return ExtractAntigravityBucketUtilization(quota, canonicalModels)
+}
+
+// GetAntigravityUsageSummary 获取所有可采样的 Antigravity OAuth 账号用量聚合摘要
+func (s *AccountUsageService) GetAntigravityUsageSummary(ctx context.Context, force ...bool) (*AntigravityUsageSummary, error) {
+	forceFetch := len(force) > 0 && force[0]
+
+	if !forceFetch {
+		if cached := s.cache.getAntigravitySummaryCache(); cached != nil {
+			if time.Since(cached.timestamp) < antigravitySummaryCacheTTL {
+				return cached.summary, nil
+			}
+		}
+	}
+
+	result, err, _ := s.cache.antigravitySummaryFlight.Do("ag-summary", func() (any, error) {
+		if !forceFetch {
+			if cached := s.cache.getAntigravitySummaryCache(); cached != nil {
+				if time.Since(cached.timestamp) < antigravitySummaryCacheTTL {
+					return cached.summary, nil
+				}
+			}
+		}
+
+		summary, err := s.computeAntigravityUsageSummary(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		s.cache.setAntigravitySummaryCache(summary)
+		return summary, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	return result.(*AntigravityUsageSummary), nil
+}
+
+func (s *AccountUsageService) computeAntigravityUsageSummary(ctx context.Context) (*AntigravityUsageSummary, error) {
+	var eligibleAccounts []*Account
+	pageSize := 50
+	page := 1
+
+	for {
+		params := pagination.PaginationParams{
+			Page:     page,
+			PageSize: pageSize,
+		}
+		accounts, pagResult, err := s.accountRepo.ListWithFilters(
+			ctx,
+			params,
+			PlatformAntigravity,
+			AccountTypeOAuth,
+			"",
+			"",
+			0,
+			"",
+		)
+		if err != nil {
+			return nil, fmt.Errorf("list accounts for aggregate usage summary failed: %w", err)
+		}
+
+		for i := range accounts {
+			acc := &accounts[i]
+			if acc.IsSchedulable() {
+				eligibleAccounts = append(eligibleAccounts, acc)
+			}
+		}
+
+		if pagResult == nil || int64(page*pageSize) >= pagResult.Total || len(accounts) == 0 {
+			break
+		}
+		page++
+	}
+
+	totalEligible := len(eligibleAccounts)
+	if totalEligible == 0 {
+		now := time.Now()
+		return &AntigravityUsageSummary{
+			EligibleAccounts: 0,
+			FailedAccounts:   0,
+			Gemini5h:         &AggregateUsageWindow{Utilization: nil, SampleCount: 0},
+			Gemini7d:         &AggregateUsageWindow{Utilization: nil, SampleCount: 0},
+			Claude5h:         &AggregateUsageWindow{Utilization: nil, SampleCount: 0},
+			Claude7d:         &AggregateUsageWindow{Utilization: nil, SampleCount: 0},
+			UpdatedAt:        now,
+		}, nil
+	}
+
+	type accountUsageResult struct {
+		usage *UsageInfo
+		err   error
+	}
+
+	results := make([]accountUsageResult, totalEligible)
+
+	var g errgroup.Group
+	g.SetLimit(4)
+
+	for i, acc := range eligibleAccounts {
+		idx := i
+		accID := acc.ID
+		g.Go(func() error {
+			usage, err := s.GetUsage(ctx, accID, false)
+			results[idx] = accountUsageResult{usage: usage, err: err}
+			return nil
+		})
+	}
+
+	_ = g.Wait()
+
+	var failedCount int
+	var gemini5hSum, gemini7dSum, claude5hSum, claude7dSum float64
+	var gemini5hCount, gemini7dCount, claude5hCount, claude7dCount int
+
+	for _, res := range results {
+		if res.err != nil || res.usage == nil || res.usage.Error != "" {
+			failedCount++
+			continue
+		}
+
+		quota := res.usage.AntigravityQuota
+		if len(quota) == 0 {
+			continue
+		}
+
+		if util, ok := ExtractGemini5hUtilization(quota); ok {
+			gemini5hSum += util
+			gemini5hCount++
+		}
+		if util, ok := ExtractGemini7dUtilization(quota); ok {
+			gemini7dSum += util
+			gemini7dCount++
+		}
+		if util, ok := ExtractClaude5hUtilization(quota); ok {
+			claude5hSum += util
+			claude5hCount++
+		}
+		if util, ok := ExtractClaude7dUtilization(quota); ok {
+			claude7dSum += util
+			claude7dCount++
+		}
+	}
+
+	makeWindow := func(sum float64, count int) *AggregateUsageWindow {
+		if count == 0 {
+			return &AggregateUsageWindow{
+				Utilization: nil,
+				SampleCount: 0,
+			}
+		}
+		mean := sum / float64(count)
+		if mean < 0 {
+			mean = 0
+		} else if mean > 100 {
+			mean = 100
+		}
+		mean = math.Round(mean*10) / 10
+		return &AggregateUsageWindow{
+			Utilization: &mean,
+			SampleCount: count,
+		}
+	}
+
+	now := time.Now()
+	return &AntigravityUsageSummary{
+		EligibleAccounts: totalEligible,
+		FailedAccounts:   failedCount,
+		Gemini5h:         makeWindow(gemini5hSum, gemini5hCount),
+		Gemini7d:         makeWindow(gemini7dSum, gemini7dCount),
+		Claude5h:         makeWindow(claude5hSum, claude5hCount),
+		Claude7d:         makeWindow(claude7dSum, claude7dCount),
+		UpdatedAt:        now,
+	}, nil
 }
 
 // GetAccountWindowStats 获取账号在指定时间窗口内的使用统计

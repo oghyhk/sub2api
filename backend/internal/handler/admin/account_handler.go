@@ -2142,6 +2142,19 @@ func (h *AccountHandler) GetUsage(c *gin.Context) {
 	response.Success(c, usage)
 }
 
+// GetUsageSummary handles getting aggregate usage summary for Antigravity OAuth accounts
+// GET /api/v1/admin/accounts/usage-summary
+func (h *AccountHandler) GetUsageSummary(c *gin.Context) {
+	force := c.Query("force") == "true"
+	summary, err := h.accountUsageService.GetAntigravityUsageSummary(c.Request.Context(), force)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, summary)
+}
+
 // ClearRateLimit handles clearing account rate limit status
 // POST /api/v1/admin/accounts/:id/clear-rate-limit
 func (h *AccountHandler) ClearRateLimit(c *gin.Context) {

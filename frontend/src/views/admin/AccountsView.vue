@@ -173,6 +173,14 @@
             {{ t('admin.accounts.listPendingSyncAction') }}
           </button>
         </div>
+        <div class="mt-3">
+          <AccountUsageSummary
+            :summary="usageSummary"
+            :loading="summaryLoading"
+            :error="summaryError"
+            @refresh="() => fetchUsageSummary(true)"
+          />
+        </div>
       </template>
       <template #table>
         <AccountBulkActionsBar
@@ -489,6 +497,7 @@ import AccountTableActions from '@/components/admin/account/AccountTableActions.
 import AccountTableFilters from '@/components/admin/account/AccountTableFilters.vue'
 import AccountBulkActionsBar from '@/components/admin/account/AccountBulkActionsBar.vue'
 import AccountActionMenu from '@/components/admin/account/AccountActionMenu.vue'
+import AccountUsageSummary from '@/components/admin/account/AccountUsageSummary.vue'
 import ImportDataModal from '@/components/admin/account/ImportDataModal.vue'
 import ReAuthAccountModal from '@/components/admin/account/ReAuthAccountModal.vue'
 import AccountTestModal from '@/components/admin/account/AccountTestModal.vue'
@@ -511,7 +520,7 @@ import { proxyExpiryBadgeClass, proxyExpiryLabelKey } from '@/utils/proxyExpiry'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import { sanitizeUrl } from '@/utils/url'
 import { getFloatingPanelPosition } from '@/utils/floatingPanel'
-import type { Account, AccountPlatform, AccountSchedulerGroupScore, AccountType, Proxy as AccountProxy, AdminGroup, WindowStats, ClaudeModel, UpstreamBillingProbeSnapshot } from '@/types'
+import type { Account, AccountPlatform, AccountSchedulerGroupScore, AccountType, Proxy as AccountProxy, AdminGroup, WindowStats, ClaudeModel, UpstreamBillingProbeSnapshot, AntigravityUsageSummary } from '@/types'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -519,6 +528,22 @@ const authStore = useAuthStore()
 
 const proxies = ref<AccountProxy[]>([])
 const groups = ref<AdminGroup[]>([])
+const usageSummary = ref<AntigravityUsageSummary | null>(null)
+const summaryLoading = ref(false)
+const summaryError = ref<string | null>(null)
+
+const fetchUsageSummary = async (force: boolean = false) => {
+  summaryLoading.value = true
+  summaryError.value = null
+  try {
+    const data = await adminAPI.accounts.getUsageSummary(force)
+    usageSummary.value = data
+  } catch (err) {
+    summaryError.value = extractApiErrorMessage(err)
+  } finally {
+    summaryLoading.value = false
+  }
+}
 const accountTableRef = ref<HTMLElement | null>(null)
 const dataTableRef = ref<InstanceType<typeof DataTable> | null>(null)
 type AccountBulkEditTarget =
@@ -1167,7 +1192,7 @@ const refreshAccountsIncrementally = async () => {
     }
     upstreamBillingNow.value = Date.now()
 
-    await refreshTodayStatsBatch()
+    await Promise.all([refreshTodayStatsBatch(), fetchUsageSummary()])
   } catch (error) {
     console.error('Auto refresh failed:', error)
   } finally {
@@ -1176,7 +1201,7 @@ const refreshAccountsIncrementally = async () => {
 }
 
 const handleManualRefresh = async () => {
-  await Promise.all([load(), loadUpstreamBillingProbeGlobalState()])
+  await Promise.all([load(), loadUpstreamBillingProbeGlobalState(), fetchUsageSummary(true)])
   // Force usage cells to refetch /usage on explicit user refresh.
   usageManualRefreshToken.value += 1
 }
@@ -2094,6 +2119,7 @@ const handleClickOutside = (event: MouseEvent) => {
 onMounted(async () => {
   load()
   loadUpstreamBillingProbeGlobalState()
+  fetchUsageSummary()
   try {
     const [p, g] = await Promise.all([adminAPI.proxies.getAll(), adminAPI.groups.getAll()])
     proxies.value = p

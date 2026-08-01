@@ -2,7 +2,7 @@ package antigravity
 
 import "testing"
 
-func TestDefaultModels_ContainsNewAndLegacyImageModels(t *testing.T) {
+func TestDefaultModels_ContainsOnlyProductModels(t *testing.T) {
 	t.Parallel()
 
 	models := DefaultModels()
@@ -12,19 +12,18 @@ func TestDefaultModels_ContainsNewAndLegacyImageModels(t *testing.T) {
 	}
 
 	requiredIDs := []string{
-		"claude-fable-5",
-		"claude-opus-4-8",
+		"claude-opus-4-6",
 		"claude-opus-4-6-thinking",
-		"gemini-2.5-flash-image",
-		"gemini-2.5-flash-image-preview",
-		"gemini-3.1-flash-image",
-		"gemini-3.1-flash-image-preview",
-		"gemini-3-pro-image", // legacy compatibility
+		"gemini-3.1-flash-lite",
+		"gemini-3.6-flash",
 	}
 
 	for _, id := range requiredIDs {
 		if _, ok := byID[id]; !ok {
 			t.Fatalf("expected model %q to be exposed in DefaultModels", id)
 		}
+	}
+	if len(byID) != len(requiredIDs) {
+		t.Fatalf("expected exactly %d product models, got %d", len(requiredIDs), len(byID))
 	}
 }

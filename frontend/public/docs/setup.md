@@ -44,6 +44,7 @@ Create a key in **API Keys**, then click **Set Up** beside that key for tool-spe
 | `gpt-5.6-luna` | GPT | OpenAI-compatible API | 358,000 |
 | `gemini-3.1-pro` | Gemini | Google Gemini API | 1,048,576 |
 | `gemini-3.6-flash` | Gemini | Google Gemini API | 1,048,576 |
+| `gemini-3.1-flash-lite` | Gemini | Google Gemini API | 1,048,576 |
 
 ## Minimal OpenAI-compatible example
 

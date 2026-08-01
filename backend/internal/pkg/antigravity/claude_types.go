@@ -159,6 +159,7 @@ var claudeModels = []modelDef{
 
 // Antigravity 支持的 Gemini 模型
 var geminiModels = []modelDef{
+	{ID: "gemini-3.1-flash-lite", DisplayName: "Gemini 3.1 Flash-Lite", CreatedAt: "2026-07-01T00:00:00Z"},
 	{ID: "gemini-3.6-flash", DisplayName: "Gemini 3.6 Flash", CreatedAt: "2026-03-01T00:00:00Z"},
 }
 

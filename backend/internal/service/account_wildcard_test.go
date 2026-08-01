@@ -509,6 +509,9 @@ func TestAccountGetModelMapping_AntigravityEnsuresGeminiDefaultPassthroughs(t *t
 	if mapping["gemini-3.6-flash"] != "gemini-3.6-flash" {
 		t.Fatalf("expected gemini-3.6-flash passthrough to be auto-filled, got: %q", mapping["gemini-3.6-flash"])
 	}
+	if mapping["gemini-3.1-flash-lite"] != "gemini-3.1-flash-lite" {
+		t.Fatalf("expected gemini-3.1-flash-lite passthrough to be auto-filled, got: %q", mapping["gemini-3.1-flash-lite"])
+	}
 	if mapping["gemini-3.1-pro-high"] != "gemini-3.1-pro-high" {
 		t.Fatalf("expected gemini-3.1-pro-high passthrough to be auto-filled, got: %q", mapping["gemini-3.1-pro-high"])
 	}

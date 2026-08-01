@@ -51,6 +51,27 @@ export const PRODUCT_MODELS: readonly ModelItem[] = [
     }
   },
   {
+    id: 'gemini-3.1-flash-lite',
+    displayName: 'Gemini 3.1 Flash-Lite',
+    providerFamily: 'gemini',
+    purposeEn: 'Efficient multimodal work for high-throughput and low-latency tasks.',
+    purposeZh: '适合高吞吐、低延迟任务的高效多模态模型',
+    protocol: 'Google Gemini API',
+    endpointPath: '/antigravity/v1beta/models/gemini-3.1-flash-lite:generateContent',
+    contextWindow: 1048576,
+    inputModalities: ['text', 'image', 'pdf'],
+    outputModalities: ['text'],
+    referencePricing: { inputPerMillion: null, outputPerMillion: null, cacheReadPerMillion: null, source: 'Account pricing' },
+    accent: {
+      providerLabel: 'Gemini',
+      badgeTextClass: 'text-[#0f766e]',
+      selectedBorderClass: 'border-[#0f766e]',
+      selectedBgClass: 'bg-[#0f766e]/5 dark:bg-[#0f766e]/10',
+      dotClass: 'bg-[#0f766e]',
+      accentHex: '#0f766e'
+    }
+  },
+  {
     id: 'claude-opus-4-6',
     displayName: 'Claude Opus 4.6',
     providerFamily: 'gpt',

@@ -21,7 +21,7 @@ func TestForwardAsChatCompletionsAntigravityUsesGeminiTransport(t *testing.T) {
 	writer := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(writer)
 	body := []byte(`{
-		"model":"gemini-3.6-flash",
+		"model":"gemini-3.1-flash-lite",
 		"messages":[{"role":"user","content":"hello"}],
 		"stream":false
 	}`)
@@ -57,7 +57,7 @@ func TestForwardAsChatCompletionsAntigravityUsesGeminiTransport(t *testing.T) {
 			"access_token": "token",
 			"project_id":   "configured-project",
 			"model_mapping": map[string]any{
-				"gemini-3.6-flash": "gemini-3.6-flash-high",
+				"gemini-3.1-flash-lite": "gemini-3.1-flash-lite",
 			},
 		},
 	}
@@ -66,7 +66,7 @@ func TestForwardAsChatCompletionsAntigravityUsesGeminiTransport(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.Equal(t, http.StatusOK, writer.Code)
-	require.Equal(t, "gemini-3.6-flash-high", result.UpstreamModel)
+	require.Equal(t, "gemini-3.1-flash-lite", result.UpstreamModel)
 	require.Len(t, upstream.requestBodies, 1)
 	require.Contains(t, string(upstream.requestBodies[0]), `"sessionId":"sub2api-`, "compat requests must forward their stable affinity to Gemini")
 

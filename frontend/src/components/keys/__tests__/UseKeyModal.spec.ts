@@ -559,7 +559,8 @@ describe('UseKeyModal', () => {
       'claude-opus-4-6'
     ])
     expect(Object.keys(parsed.provider['google-vps2'].models)).toEqual([
-      'gemini-3.6-flash'
+      'gemini-3.6-flash',
+      'gemini-3.1-flash-lite'
     ])
     expect(parsed.provider.openai.options.baseURL).toBe('https://example.com/v1')
     expect(parsed.provider['google-vps2'].options.baseURL).toBe('https://example.com/antigravity/v1beta')

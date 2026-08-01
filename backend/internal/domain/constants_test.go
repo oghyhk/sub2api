@@ -6,12 +6,14 @@ func TestDefaultAntigravityModelMapping_ContainsOpusAndGemini36Flash(t *testing.
 	t.Parallel()
 
 	cases := map[string]string{
-		"claude-opus-4-6":          "claude-opus-4-6-thinking",
-		"claude-opus-4-6-thinking": "claude-opus-4-6-thinking",
-		"gemini-3.6-flash":         "gemini-3.6-flash-high",
-		"gemini-3.6-flash-high":    "gemini-3.6-flash-high",
-		"claude-sonnet-4-5":        "claude-sonnet-4-5",
-		"gemini-3-flash":           "gemini-3-flash",
+		"claude-opus-4-6":               "claude-opus-4-6-thinking",
+		"claude-opus-4-6-thinking":      "claude-opus-4-6-thinking",
+		"gemini-3.6-flash":              "gemini-3.6-flash-high",
+		"gemini-3.6-flash-high":         "gemini-3.6-flash-high",
+		"gemini-3.1-flash-lite":         "gemini-3.1-flash-lite",
+		"gemini-3.1-flash-lite-preview": "gemini-3.1-flash-lite",
+		"claude-sonnet-4-5":             "claude-sonnet-4-5",
+		"gemini-3-flash":                "gemini-3-flash",
 	}
 
 	for from, want := range cases {

@@ -84,6 +84,11 @@ func TestIsAntigravityChatCompletionsRequestReplaysBody(t *testing.T) {
 			want: true,
 		},
 		{
+			name: "antigravity flash lite model",
+			body: `{"model":"gemini-3.1-flash-lite","messages":[{"role":"user","content":"hello"}]}`,
+			want: true,
+		},
+		{
 			name: "openai model",
 			body: `{"model":"gpt-5.6-sol","messages":[{"role":"user","content":"hello"}]}`,
 			want: false,

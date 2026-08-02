@@ -333,22 +333,22 @@ func TestShouldStopOpenAIOAuth429Failover_OnlyDuringStorm(t *testing.T) {
 	require.False(t, svc.ShouldStopOpenAIOAuth429Failover(account, http.StatusTooManyRequests, 0, &state))
 }
 
-func TestShouldStopOpenAIOAuth429Failover_TracksOneGrokFollowupAttempt(t *testing.T) {
+func TestShouldStopOpenAIOAuth429Failover_AllowsGrokPoolSwitchBudget(t *testing.T) {
 	svc := &OpenAIGatewayService{}
 	account := &Account{ID: 44, Platform: PlatformGrok, Type: AccountTypeOAuth}
 	apiKeyAccount := &Account{ID: 45, Platform: PlatformGrok, Type: AccountTypeAPIKey}
 
-	t.Run("429 then 500 stops after one followup", func(t *testing.T) {
+	t.Run("429 then 500 keeps trying Grok OAuth accounts", func(t *testing.T) {
 		var state OpenAIOAuth429FailoverState
 		require.False(t, svc.ShouldStopOpenAIOAuth429Failover(account, http.StatusTooManyRequests, 1, &state))
-		require.True(t, svc.ShouldStopOpenAIOAuth429Failover(account, http.StatusInternalServerError, 2, &state))
+		require.False(t, svc.ShouldStopOpenAIOAuth429Failover(account, http.StatusInternalServerError, 2, &state))
 	})
 
-	t.Run("500 then 429 still allows one followup", func(t *testing.T) {
+	t.Run("multiple Grok failures keep using the configured switch budget", func(t *testing.T) {
 		var state OpenAIOAuth429FailoverState
 		require.False(t, svc.ShouldStopOpenAIOAuth429Failover(account, http.StatusInternalServerError, 1, &state))
 		require.False(t, svc.ShouldStopOpenAIOAuth429Failover(account, http.StatusTooManyRequests, 2, &state))
-		require.True(t, svc.ShouldStopOpenAIOAuth429Failover(account, http.StatusBadGateway, 3, &state))
+		require.False(t, svc.ShouldStopOpenAIOAuth429Failover(account, http.StatusBadGateway, 3, &state))
 	})
 
 	t.Run("OAuth 429 then API-key failure consumes the same followup", func(t *testing.T) {

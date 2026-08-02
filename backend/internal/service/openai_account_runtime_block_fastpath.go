@@ -18,9 +18,10 @@ const (
 	openAIOAuth429StormMaxAccountSwitches = 1
 )
 
-// OpenAIOAuth429FailoverState tracks the request-local follow-up budget after
-// the first Grok OAuth 429. Once that 429 occurs, exactly one different account
-// may be attempted; any failure from that follow-up account ends failover.
+// OpenAIOAuth429FailoverState keeps the request-local Grok 429 marker. It is
+// used to distinguish Grok OAuth retries from the OpenAI OAuth 429 storm guard.
+// Grok quotas are account-scoped, so Grok must be allowed to use the normal
+// account-switch budget after a single account returns 429.
 type OpenAIOAuth429FailoverState struct {
 	grokOAuth429FollowupPending bool
 }
@@ -330,22 +331,22 @@ func (s *OpenAIGatewayService) ShouldStopOpenAIOAuth429Failover(account *Account
 	if failedSwitches < openAIOAuth429StormMaxAccountSwitches {
 		return false
 	}
-	if state != nil && state.grokOAuth429FollowupPending {
-		// The follow-up budget was armed by a Grok OAuth 429. Consume it on
-		// any failing follow-up account, even if a mixed pool selected an API-key
-		// account next.
-		return true
-	}
 	if isGrokOAuthAccount(account) {
-		if state == nil {
-			// Preserve the old threshold for callers that have not adopted the
-			// request-local state contract yet.
-			return statusCode == http.StatusTooManyRequests && failedSwitches >= 2
-		}
-		if statusCode == http.StatusTooManyRequests {
+		// Do not stop Grok after one follow-up account. The caller's normal
+		// max-account-switch budget is the safe bound, and lets a request reach
+		// a healthy account when 429s are isolated to individual OAuth accounts.
+		// Keep the marker for mixed-platform pools, where a later non-Grok
+		// account still consumes the conservative follow-up path below.
+		if state != nil && statusCode == http.StatusTooManyRequests {
 			state.grokOAuth429FollowupPending = true
 		}
 		return false
+	}
+	if state != nil && state.grokOAuth429FollowupPending {
+		// A mixed pool selected a non-Grok account after a Grok OAuth 429.
+		// Preserve the conservative one-follow-up guard for that unrelated
+		// account type; pure Grok pools use the normal switch budget above.
+		return true
 	}
 	if statusCode != http.StatusTooManyRequests || !isOpenAIOAuthAccount(account) {
 		return false

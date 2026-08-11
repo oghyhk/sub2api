@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -38,10 +39,40 @@ const (
 	geminiRetryMaxDelay  = 16 * time.Second
 )
 
-// Gemini tool calling now requires `thoughtSignature` in parts that include `functionCall`.
-// Many clients don't send it; we inject a known dummy signature to satisfy the validator.
+// Gemini tool calling requires `thoughtSignature` in parts that include `functionCall`.
+// Chat Completions has no standard field that clients reliably round-trip for this
+// provider state, so the compatibility bridge carries it inside the opaque tool-call
+// ID. The legacy dummy remains a last resort for calls that predate this bridge.
 // Ref: https://ai.google.dev/gemini-api/docs/thought-signatures
-const geminiDummyThoughtSignature = "skip_thought_signature_validator"
+const (
+	geminiDummyThoughtSignature        = "skip_thought_signature_validator"
+	geminiThoughtSignatureToolIDPrefix = "toolu_gemts_"
+)
+
+func newGeminiToolUseID(thoughtSignature string) string {
+	opaqueID := randomHex(8)
+	if strings.TrimSpace(thoughtSignature) == "" {
+		return "toolu_" + opaqueID
+	}
+	encoded := base64.RawURLEncoding.EncodeToString([]byte(thoughtSignature))
+	return geminiThoughtSignatureToolIDPrefix + opaqueID + "." + encoded
+}
+
+func geminiThoughtSignatureFromToolUseID(toolUseID string) string {
+	rest, ok := strings.CutPrefix(toolUseID, geminiThoughtSignatureToolIDPrefix)
+	if !ok {
+		return ""
+	}
+	_, encoded, ok := strings.Cut(rest, ".")
+	if !ok || encoded == "" {
+		return ""
+	}
+	decoded, err := base64.RawURLEncoding.DecodeString(encoded)
+	if err != nil {
+		return ""
+	}
+	return string(decoded)
+}
 
 type GeminiMessagesCompatService struct {
 	accountRepo               AccountRepository
@@ -2746,10 +2777,11 @@ func convertGeminiToClaudeMessage(geminiResp map[string]any, originalModel strin
 								name = "tool"
 							}
 							args := fc["args"]
+							thoughtSignature, _ := pm["thoughtSignature"].(string)
 							sawToolUse = true
 							contentBlocks = append(contentBlocks, map[string]any{
 								"type":  "tool_use",
-								"id":    "toolu_" + randomHex(8),
+								"id":    newGeminiToolUseID(thoughtSignature),
 								"name":  name,
 								"input": args,
 							})
@@ -3199,6 +3231,9 @@ func convertClaudeMessagesToGeminiContents(messages any, toolUseIDToName map[str
 					}
 					signature, _ := bm["signature"].(string)
 					signature = strings.TrimSpace(signature)
+					if signature == "" {
+						signature = geminiThoughtSignatureFromToolUseID(id)
+					}
 					if signature == "" {
 						signature = geminiDummyThoughtSignature
 					}

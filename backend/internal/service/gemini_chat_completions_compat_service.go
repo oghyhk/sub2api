@@ -788,6 +788,7 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 								if strings.TrimSpace(name) == "" {
 									name = "tool"
 								}
+								thoughtSignature, _ := part["thoughtSignature"].(string)
 								if closeOpenBlock() {
 									return &geminiStreamResult{usage: &usage, firstTokenMs: firstTokenMs}, nil
 								}
@@ -807,7 +808,7 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 										Index: &idx,
 										ContentBlock: &apicompat.AnthropicContentBlock{
 											Type:  "tool_use",
-											ID:    "toolu_" + randomHex(8),
+											ID:    newGeminiToolUseID(thoughtSignature),
 											Name:  name,
 											Input: json.RawMessage(`{}`),
 										},

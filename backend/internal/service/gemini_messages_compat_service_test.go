@@ -942,6 +942,68 @@ func TestGeminiMessagesHandleStreamingResponse_ClosesToolBlockBeforeText(t *test
 	require.Equal(t, -1, open, "stream ended with a content block still open")
 }
 
+func TestGeminiThoughtSignatureToolIDRoundTrip(t *testing.T) {
+	signature := "encrypted/provider+state=="
+	toolUseID := newGeminiToolUseID(signature)
+
+	require.True(t, strings.HasPrefix(toolUseID, geminiThoughtSignatureToolIDPrefix))
+	require.Equal(t, signature, geminiThoughtSignatureFromToolUseID(toolUseID))
+	require.Empty(t, geminiThoughtSignatureFromToolUseID("toolu_legacy"))
+	require.Empty(t, geminiThoughtSignatureFromToolUseID(geminiThoughtSignatureToolIDPrefix+"broken.not-base64!"))
+}
+
+func TestGeminiFunctionCallThoughtSignatureSurvivesChatRoundTrip(t *testing.T) {
+	signature := "encrypted/provider+state=="
+	geminiResponse := map[string]any{
+		"candidates": []any{map[string]any{
+			"content": map[string]any{
+				"role": "model",
+				"parts": []any{map[string]any{
+					"functionCall": map[string]any{
+						"name": "lookup",
+						"args": map[string]any{"n": float64(1)},
+					},
+					"thoughtSignature": signature,
+				}},
+			},
+			"finishReason": "STOP",
+		}},
+	}
+
+	claudeResponse, _ := convertGeminiToClaudeMessage(geminiResponse, "gemini-3.6-flash", nil)
+	content := claudeResponse["content"].([]any)
+	require.Len(t, content, 1)
+	toolUse := content[0].(map[string]any)
+	toolUseID := toolUse["id"].(string)
+	require.Equal(t, signature, geminiThoughtSignatureFromToolUseID(toolUseID))
+
+	claudeRequest := map[string]any{
+		"model":      "gemini-3.6-flash",
+		"max_tokens": 1024,
+		"messages": []any{
+			map[string]any{"role": "user", "content": "Start"},
+			map[string]any{"role": "assistant", "content": content},
+			map[string]any{"role": "user", "content": []any{map[string]any{
+				"type":        "tool_result",
+				"tool_use_id": toolUseID,
+				"content":     "result",
+			}}},
+		},
+	}
+	claudeBody, err := json.Marshal(claudeRequest)
+	require.NoError(t, err)
+
+	geminiBody, err := convertClaudeMessagesToGeminiGenerateContent(claudeBody)
+	require.NoError(t, err)
+	var converted map[string]any
+	require.NoError(t, json.Unmarshal(geminiBody, &converted))
+	contents := converted["contents"].([]any)
+	require.Len(t, contents, 3)
+	modelParts := contents[1].(map[string]any)["parts"].([]any)
+	require.Len(t, modelParts, 1)
+	require.Equal(t, signature, modelParts[0].(map[string]any)["thoughtSignature"])
+}
+
 type anthropicContentBlockEvent struct {
 	event     string
 	index     int

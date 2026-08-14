@@ -99,6 +99,9 @@ func TestForwardBaseURLs_Daily优先(t *testing.T) {
 	if urls[0] != antigravityDailyBaseURL {
 		t.Errorf("第一个 URL 应为 daily: got %s, want %s", urls[0], antigravityDailyBaseURL)
 	}
+	if antigravityDailyBaseURL != "https://daily-cloudcode-pa.googleapis.com" {
+		t.Errorf("daily URL 不匹配当前 Antigravity 客户端: got %s", antigravityDailyBaseURL)
+	}
 
 	// 应包含所有 URL
 	if len(urls) != len(BaseURLs) {
@@ -690,7 +693,7 @@ func TestConstants_值正确(t *testing.T) {
 	if RedirectURI != "http://localhost:8085/callback" {
 		t.Errorf("RedirectURI 不匹配: got %s", RedirectURI)
 	}
-	if GetUserAgent() != "antigravity/1.23.2 windows/amd64" {
+	if GetUserAgent() != "antigravity/2.8.1 windows/amd64" {
 		t.Errorf("UserAgent 不匹配: got %s", GetUserAgent())
 	}
 	if SessionTTL != 30*time.Minute {

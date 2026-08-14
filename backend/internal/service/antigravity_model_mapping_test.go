@@ -36,6 +36,12 @@ func TestAntigravityGatewayService_GetMappedModel(t *testing.T) {
 			accountMapping: map[string]string{"claude-opus-4": "my-opus"},
 			expected:       "my-opus",
 		},
+		{
+			name:           "账户映射 - 保留 Gemini 3.7 默认映射",
+			requestedModel: "gemini-3.7-flash",
+			accountMapping: map[string]string{"claude-opus-4": "my-opus"},
+			expected:       "gemini-3.7-flash-high",
+		},
 
 		// 2. 默认映射（DefaultAntigravityModelMapping）
 		{
@@ -67,6 +73,12 @@ func TestAntigravityGatewayService_GetMappedModel(t *testing.T) {
 			requestedModel: "claude-haiku-4-5-20251001",
 			accountMapping: nil,
 			expected:       "claude-sonnet-4-6",
+		},
+		{
+			name:           "默认映射 - gemini-3.7-flash → gemini-3.7-flash-high",
+			requestedModel: "gemini-3.7-flash",
+			accountMapping: nil,
+			expected:       "gemini-3.7-flash-high",
 		},
 		{
 			name:           "默认映射 - claude-sonnet-4-5-20250929 → claude-sonnet-4-5",
@@ -135,6 +147,12 @@ func TestAntigravityGatewayService_GetMappedModel(t *testing.T) {
 			requestedModel: "gemini-3-flash",
 			accountMapping: nil,
 			expected:       "gemini-3-flash",
+		},
+		{
+			name:           "默认映射透传 - gemini-3.7-flash-medium",
+			requestedModel: "gemini-3.7-flash-medium",
+			accountMapping: nil,
+			expected:       "gemini-3.7-flash-medium",
 		},
 
 		// 4. 未在默认映射中的模型返回空字符串（不支持）

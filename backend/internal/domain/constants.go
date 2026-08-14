@@ -105,6 +105,11 @@ var DefaultAntigravityModelMapping = map[string]string{
 	// Gemini 3 preview 映射
 	"gemini-3-flash-preview": "gemini-3-flash",
 	"gemini-3-pro-preview":   "gemini-3-pro-high",
+	// Gemini 3.7 白名单
+	"gemini-3.7-flash":        "gemini-3.7-flash-high",
+	"gemini-3.7-flash-high":   "gemini-3.7-flash-high",
+	"gemini-3.7-flash-medium": "gemini-3.7-flash-medium",
+	"gemini-3.7-flash-low":    "gemini-3.7-flash-low",
 	// Gemini 3.6 白名单
 	"gemini-3.6-flash":      "gemini-3.6-flash-high",
 	"gemini-3.6-flash-high": "gemini-3.6-flash-high",

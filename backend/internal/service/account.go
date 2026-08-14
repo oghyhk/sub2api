@@ -603,9 +603,13 @@ func (a *Account) resolveModelMapping(rawMapping map[string]any) map[string]stri
 	}
 	if len(result) > 0 {
 		if a.Platform == domain.PlatformAntigravity {
-			ensureAntigravityDefaultPassthroughs(result, []string{
+			ensureAntigravityDefaultMappings(result, []string{
 				"gemini-3-flash",
 				"gemini-3.1-flash-lite",
+				"gemini-3.7-flash",
+				"gemini-3.7-flash-high",
+				"gemini-3.7-flash-medium",
+				"gemini-3.7-flash-low",
 				"gemini-3.6-flash",
 				"gemini-3.1-pro-high",
 				"gemini-3.1-pro-low",
@@ -656,7 +660,7 @@ func modelMappingSignature(rawMapping map[string]any) uint64 {
 	return h.Sum64()
 }
 
-func ensureAntigravityDefaultPassthrough(mapping map[string]string, model string) {
+func ensureAntigravityDefaultMapping(mapping map[string]string, model string) {
 	if mapping == nil || model == "" {
 		return
 	}
@@ -668,12 +672,16 @@ func ensureAntigravityDefaultPassthrough(mapping map[string]string, model string
 			return
 		}
 	}
-	mapping[model] = model
+	target := strings.TrimSpace(domain.DefaultAntigravityModelMapping[model])
+	if target == "" {
+		target = model
+	}
+	mapping[model] = target
 }
 
-func ensureAntigravityDefaultPassthroughs(mapping map[string]string, models []string) {
+func ensureAntigravityDefaultMappings(mapping map[string]string, models []string) {
 	for _, model := range models {
-		ensureAntigravityDefaultPassthrough(mapping, model)
+		ensureAntigravityDefaultMapping(mapping, model)
 	}
 }
 

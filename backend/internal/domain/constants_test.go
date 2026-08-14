@@ -2,12 +2,16 @@ package domain
 
 import "testing"
 
-func TestDefaultAntigravityModelMapping_ContainsOpusAndGemini36Flash(t *testing.T) {
+func TestDefaultAntigravityModelMapping_ContainsOpusAndCurrentGeminiFlash(t *testing.T) {
 	t.Parallel()
 
 	cases := map[string]string{
 		"claude-opus-4-6":               "claude-opus-4-6-thinking",
 		"claude-opus-4-6-thinking":      "claude-opus-4-6-thinking",
+		"gemini-3.7-flash":              "gemini-3.7-flash-high",
+		"gemini-3.7-flash-high":         "gemini-3.7-flash-high",
+		"gemini-3.7-flash-medium":       "gemini-3.7-flash-medium",
+		"gemini-3.7-flash-low":          "gemini-3.7-flash-low",
 		"gemini-3.6-flash":              "gemini-3.6-flash-high",
 		"gemini-3.6-flash-high":         "gemini-3.6-flash-high",
 		"gemini-3.1-flash-lite":         "gemini-3.1-flash-lite",

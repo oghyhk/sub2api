@@ -438,7 +438,7 @@ func (c *Client) GetUserInfo(ctx context.Context, accessToken string) (*UserInfo
 }
 
 // LoadCodeAssist 获取账户信息，返回解析后的结构体和原始 JSON
-// 支持 URL fallback：sandbox → daily → prod
+// 支持 URL fallback：prod → daily
 func (c *Client) LoadCodeAssist(ctx context.Context, accessToken string) (*LoadCodeAssistResponse, map[string]any, error) {
 	reqBody := LoadCodeAssistRequest{}
 	reqBody.Metadata.IDEType = "ANTIGRAVITY"

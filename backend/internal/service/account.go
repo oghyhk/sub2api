@@ -606,6 +606,10 @@ func (a *Account) resolveModelMapping(rawMapping map[string]any) map[string]stri
 			ensureAntigravityDefaultMappings(result, []string{
 				"gemini-3-flash",
 				"gemini-3.1-flash-lite",
+				"gemini-3.8-flash",
+				"gemini-3.8-flash-high",
+				"gemini-3.8-flash-medium",
+				"gemini-3.8-flash-low",
 				"gemini-3.7-flash",
 				"gemini-3.7-flash-high",
 				"gemini-3.7-flash-medium",

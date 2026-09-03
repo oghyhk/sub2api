@@ -36,6 +36,14 @@ describe('useModelWhitelist', () => {
     expect(models).toContain('gemini-3-pro-image')
   })
 
+  it('antigravity 模型列表包含 Gemini 3.8 Flash', () => {
+    const models = getModelsByPlatform('antigravity')
+
+    expect(models).toContain('gemini-3.8-flash')
+    expect(models).toContain('gemini-3.8-flash-high')
+    expect(models).toContain('gemini-3.7-flash')
+  })
+
   it('Claude 模型列表包含新发布的 Claude 模型', () => {
     expect(getModelsByPlatform('claude')).toContain('claude-fable-5')
     expect(getModelsByPlatform('antigravity')).toContain('claude-fable-5')

@@ -8,6 +8,10 @@ func TestDefaultAntigravityModelMapping_ContainsOpusAndCurrentGeminiFlash(t *tes
 	cases := map[string]string{
 		"claude-opus-4-6":               "claude-opus-4-6-thinking",
 		"claude-opus-4-6-thinking":      "claude-opus-4-6-thinking",
+		"gemini-3.8-flash":              "gemini-3.8-flash-high",
+		"gemini-3.8-flash-high":         "gemini-3.8-flash-high",
+		"gemini-3.8-flash-medium":       "gemini-3.8-flash-medium",
+		"gemini-3.8-flash-low":          "gemini-3.8-flash-low",
 		"gemini-3.7-flash":              "gemini-3.7-flash-high",
 		"gemini-3.7-flash-high":         "gemini-3.7-flash-high",
 		"gemini-3.7-flash-medium":       "gemini-3.7-flash-medium",

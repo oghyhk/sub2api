@@ -1554,13 +1554,22 @@ func (r *accountRepository) syncSchedulerAccountSnapshots(ctx context.Context, a
 }
 
 func (r *accountRepository) ClearError(ctx context.Context, id int64) error {
-	_, err := r.client.Account.Update().
-		Where(dbaccount.IDEQ(id)).
+	// SetError() 会同时把 schedulable 置为 false，而此前没有任何路径会把它改回
+	// true：一次瞬时上游故障（401/403/限流/DNS）就会把账号永久踢出调度池，只能
+	// 靠管理员手动重新打开。这里在“从 error 恢复”时把开关一并还原。
+	// 仅当账号当前确实处于 error 状态时才还原：管理员手动关闭的账号保持
+	// active + schedulable=false，不会被这里重新打开。
+	affected, err := r.client.Account.Update().
+		Where(dbaccount.IDEQ(id), dbaccount.StatusEQ(service.StatusError)).
 		SetStatus(service.StatusActive).
 		SetErrorMessage("").
+		SetSchedulable(true).
 		Save(ctx)
 	if err != nil {
 		return err
+	}
+	if affected == 0 {
+		return nil
 	}
 	if err := enqueueSchedulerOutbox(ctx, r.sql, service.SchedulerOutboxEventAccountChanged, &id, nil, nil); err != nil {
 		logger.LegacyPrintf("repository.account", "[SchedulerOutbox] enqueue clear error failed: account=%d err=%v", id, err)

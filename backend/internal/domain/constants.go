@@ -79,6 +79,14 @@ var DefaultAntigravityModelMapping = map[string]string{
 	"claude-fable-5":             "claude-fable-5",           // 官方模型
 	"claude-opus-4-8":            "claude-opus-4-8",          // 官方模型
 	"claude-opus-4-7":            "claude-opus-4-7",          // 官方模型
+	"claude-opus-5-5":            "claude-opus-4-6-thinking", // Claude 5.5 映射
+	"claude-opus-5.5":            "claude-opus-4-6-thinking",
+	"claude-opus-5-5-thinking":   "claude-opus-4-6-thinking",
+	"claude-opus-5.5-thinking":   "claude-opus-4-6-thinking",
+	"claude-sonnet-5-5":          "claude-sonnet-4-6",
+	"claude-sonnet-5.5":          "claude-sonnet-4-6",
+	"claude-sonnet-5-5-thinking": "claude-sonnet-4-6",
+	"claude-sonnet-5.5-thinking": "claude-sonnet-4-6",
 	"claude-opus-4-6-thinking":   "claude-opus-4-6-thinking", // 官方模型
 	"claude-opus-4-6":            "claude-opus-4-6-thinking", // 简称映射
 	"claude-opus-4-5-thinking":   "claude-opus-4-6-thinking", // 迁移旧模型

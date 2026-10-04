@@ -298,8 +298,7 @@ func (s *AntigravityGatewayService) handleGeminiStreamToNonStreaming(c *gin.Cont
 	var firstTokenMs *int
 	var last map[string]any
 	var lastWithParts map[string]any
-	var collectedImageParts []map[string]any // 收集所有包含图片的 parts
-	var collectedTextParts []string          // 收集所有文本片段
+	var collectedParts []map[string]any // 收集所有 parts（text、thinking、functionCall、inlineData 等）
 
 	type scanEvent struct {
 		line string
@@ -417,16 +416,9 @@ func (s *AntigravityGatewayService) handleGeminiStreamToNonStreaming(c *gin.Cont
 			// 保留最后一个有 parts 的响应
 			if parts := extractGeminiParts(parsed); len(parts) > 0 {
 				lastWithParts = parsed
-				// 收集包含图片和文本的 parts
-				for _, part := range parts {
-					if inlineData, ok := part["inlineData"].(map[string]any); ok {
-						collectedImageParts = append(collectedImageParts, part)
-						_ = inlineData // 避免 unused 警告
-					}
-					if text, ok := part["text"].(string); ok && text != "" {
-						collectedTextParts = append(collectedTextParts, text)
-					}
-				}
+
+				// 收集所有 parts（text、thinking、functionCall、inlineData 等）
+				collectedParts = append(collectedParts, parts...)
 			}
 
 		case <-intervalCh:
@@ -453,14 +445,9 @@ returnResponse:
 		}
 	}
 
-	// 如果收集到了图片 parts，需要合并到最终响应中
-	if len(collectedImageParts) > 0 {
-		finalResponse = mergeImagePartsToResponse(finalResponse, collectedImageParts)
-	}
-
-	// 如果收集到了文本，需要合并到最终响应中
-	if len(collectedTextParts) > 0 {
-		finalResponse = mergeTextPartsToResponse(finalResponse, collectedTextParts)
+	// 将收集的所有 parts 按类型边界合并到最终响应中（thinking part 与普通 text part 保持分离）
+	if len(collectedParts) > 0 {
+		finalResponse = mergeCollectedPartsToResponse(finalResponse, collectedParts)
 	}
 
 	respBody, err := json.Marshal(finalResponse)
@@ -531,13 +518,18 @@ func mergeCollectedPartsToResponse(response map[string]any, collectedParts []map
 	// 3. thinking、functionCall、inlineData 等保持原样
 	var mergedParts []any
 	var textBuffer strings.Builder
+	var textBufferMeta map[string]any // 保留普通 text part 的附加字段（如 thoughtSignature，缓存亲和需要）
 
 	flushTextBuffer := func() {
 		if textBuffer.Len() > 0 {
-			mergedParts = append(mergedParts, map[string]any{
-				"text": textBuffer.String(),
-			})
+			merged := make(map[string]any, len(textBufferMeta)+1)
+			for k, v := range textBufferMeta {
+				merged[k] = v
+			}
+			merged["text"] = textBuffer.String()
+			mergedParts = append(mergedParts, merged)
 			textBuffer.Reset()
+			textBufferMeta = nil
 		}
 	}
 
@@ -550,7 +542,15 @@ func mergeCollectedPartsToResponse(response map[string]any, collectedParts []map
 				flushTextBuffer()
 				mergedParts = append(mergedParts, part)
 			} else {
-				// 普通 text，累积到 buffer
+				// 普通 text，累积到 buffer；按 key 合并附加字段（后到的 thoughtSignature 覆盖）
+				if textBufferMeta == nil {
+					textBufferMeta = make(map[string]any, len(part))
+				}
+				for k, v := range part {
+					if k != "text" {
+						textBufferMeta[k] = v
+					}
+				}
 				_, _ = textBuffer.WriteString(text)
 			}
 		} else {

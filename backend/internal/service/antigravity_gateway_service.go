@@ -612,11 +612,43 @@ func injectIdentityPatchToGeminiRequest(body []byte) ([]byte, error) {
 	return json.Marshal(request)
 }
 
+// antigravityForcedThinkingBudgets pins always-on thinking at the highest
+// effort tier for models that must never answer without reasoning. Values must
+// stay within the upstream-accepted thinking_budget range [-1, 65535].
+var antigravityForcedThinkingBudgets = map[string]int64{
+	"gemini-3.5-flash-lite": 65535,
+}
+
+// applyForcedThinkingBudget injects generationConfig.thinkingConfig.thinkingBudget
+// for pinned models, overriding any client-supplied budget so the model always
+// reasons at its maximum available tier. Client visibility preference
+// (includeThoughts) is preserved untouched.
+func applyForcedThinkingBudget(request map[string]any, model string) {
+	budget, ok := antigravityForcedThinkingBudgets[model]
+	if !ok {
+		return
+	}
+	genCfg, _ := request["generationConfig"].(map[string]any)
+	if genCfg == nil {
+		genCfg = map[string]any{}
+		request["generationConfig"] = genCfg
+	}
+	thinkCfg, _ := genCfg["thinkingConfig"].(map[string]any)
+	if thinkCfg == nil {
+		thinkCfg = map[string]any{}
+		genCfg["thinkingConfig"] = thinkCfg
+	}
+	thinkCfg["thinkingBudget"] = budget
+}
+
 // wrapV1InternalRequest 包装请求为 v1internal 格式
 func (s *AntigravityGatewayService) wrapV1InternalRequest(projectID, model string, originalBody []byte) ([]byte, error) {
 	var request any
 	if err := json.Unmarshal(originalBody, &request); err != nil {
 		return nil, fmt.Errorf("解析请求体失败: %w", err)
+	}
+	if reqMap, ok := request.(map[string]any); ok {
+		applyForcedThinkingBudget(reqMap, model)
 	}
 	projectID = strings.TrimSpace(projectID)
 	if projectID == "" {

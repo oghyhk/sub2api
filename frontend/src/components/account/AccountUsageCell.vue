@@ -790,7 +790,9 @@ const antigravityGemini5hUsageFromAPI = computed(() =>
   getAntigravityUsageFromAPI([
     'gemini-pro-agent', 'gemini-3.1-pro-high', 'gemini-3.1-pro-low',
     'gemini-3-flash', 'gemini-3-flash-agent', 'gemini-3.6-flash-tiered',
-    'gemini-3.1-flash-image'
+    'gemini-3.1-flash-image',
+    'gemini-3.8-flash-high', 'gemini-3.7-flash-high', 'gemini-3.6-flash-high',
+    'gemini-3.5-flash-lite'
   ])
 )
 
@@ -803,7 +805,8 @@ const antigravityClaude5hUsageFromAPI = computed(() =>
   getAntigravityUsageFromAPI([
     'claude-fable-5', 'claude-sonnet-4-5', 'claude-opus-4-5-thinking',
     'claude-sonnet-4-6', 'claude-opus-4-6', 'claude-opus-4-6-thinking',
-    'claude-opus-4-7', 'claude-opus-4-8'
+    'claude-opus-4-7', 'claude-opus-4-8',
+    'claude-opus-5-5', 'claude-sonnet-5-5'
   ])
 )
 

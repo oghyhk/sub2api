@@ -504,7 +504,7 @@ func (s *AccountUsageService) GetUsage(ctx context.Context, accountID int64, for
 		}
 
 		s.tryClearRecoverableAccountError(ctx, account)
-		return usage, nil
+		return s.applyAnthropicUsageDisplayOverlay(ctx, usage, account), nil
 	}
 
 	// Setup Token账号：根据session_window推算（没有profile scope，无法调用usage API）
@@ -512,7 +512,7 @@ func (s *AccountUsageService) GetUsage(ctx context.Context, accountID int64, for
 		usage := s.estimateSetupTokenUsage(account)
 		// 添加窗口统计
 		s.addWindowStats(ctx, account, usage)
-		return usage, nil
+		return s.applyAnthropicUsageDisplayOverlay(ctx, usage, account), nil
 	}
 
 	// API Key账号不支持usage查询
@@ -553,7 +553,7 @@ func (s *AccountUsageService) GetPassiveUsage(ctx context.Context, accountID int
 	// 添加窗口统计
 	s.addWindowStats(ctx, account, info)
 
-	return info, nil
+	return s.applyAnthropicUsageDisplayOverlay(ctx, info, account), nil
 }
 
 // buildPassiveUsageWindow 从 Extra 中的被动采样数据（utilization 为 0-1 小数、reset 为 Unix 秒）
@@ -1742,6 +1742,8 @@ func ExtractGemini5hUtilization(quota map[string]*AntigravityModelQuota) (float6
 		"gemini-pro-agent", "gemini-3.1-pro-high", "gemini-3.1-pro-low",
 		"gemini-3-flash", "gemini-3-flash-agent", "gemini-3.6-flash-tiered",
 		"gemini-3.1-flash-image",
+		"gemini-3.8-flash-high", "gemini-3.7-flash-high", "gemini-3.6-flash-high",
+		"gemini-3.5-flash-lite",
 	}
 	return ExtractAntigravityBucketUtilization(quota, fallbackModels)
 }
@@ -1760,6 +1762,7 @@ func ExtractClaude5hUtilization(quota map[string]*AntigravityModelQuota) (float6
 		"claude-fable-5", "claude-sonnet-4-5", "claude-opus-4-5-thinking",
 		"claude-sonnet-4-6", "claude-opus-4-6", "claude-opus-4-6-thinking",
 		"claude-opus-4-7", "claude-opus-4-8",
+		"claude-opus-5-5", "claude-sonnet-5-5",
 	}
 	return ExtractAntigravityBucketUtilization(quota, fallbackModels)
 }

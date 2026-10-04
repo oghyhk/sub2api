@@ -3330,8 +3330,22 @@ func convertClaudeToolsToGeminiTools(tools any) []any {
 			continue
 		}
 		if isClaudeWebSearchToolMap(tm) {
-			hasWebSearch = true
-			continue
+			// Function-form web search tools (client-executed, e.g. Hermes sends
+			// {"type":"function","function":{"name":"web_search",...}}) must stay
+			// regular function declarations. Antigravity rejects requests that mix
+			// built-in tools (googleSearch) with functionDeclarations unless
+			// tool_config.include_server_side_tool_invocations is set — and the
+			// v1internal endpoint currently ignores that flag even when set
+			// (verified 2026-09-27; same class of bug as googleapis/python-genai#2761).
+			// Hosted-form tools ({"type":"web_search*"} with no executable schema)
+			// still map to the googleSearch built-in below.
+			wsName, hasName := tm["name"].(string)
+			_, hasSchema := tm["input_schema"]
+			if !(hasName && wsName != "" && hasSchema) {
+				hasWebSearch = true
+				continue
+			}
+			// Fall through: treat function-form web search as a normal function.
 		}
 
 		var name, desc string
@@ -3382,7 +3396,12 @@ func convertClaudeToolsToGeminiTools(tools any) []any {
 			"functionDeclarations": funcDecls,
 		})
 	}
-	if hasWebSearch {
+	// googleSearch can only be sent when it is the ONLY tool: mixing built-ins
+	// with functionDeclarations trips the upstream 400 ("Please enable
+	// tool_config.include_server_side_tool_invocations", which the v1internal
+	// endpoint ignores — see the note in the loop above). When both are present,
+	// keep the functions and drop the built-in search.
+	if hasWebSearch && len(funcDecls) == 0 {
 		out = append(out, map[string]any{
 			"googleSearch": map[string]any{},
 		})

@@ -337,7 +337,11 @@ func TestCleanToolSchema_NormalizesGeminiUnsupportedSchemaFields(t *testing.T) {
 	require.NotContains(t, emptySchema, "type")
 }
 
-func TestConvertClaudeToolsToGeminiTools_PreservesWebSearchAlongsideFunctions(t *testing.T) {
+func TestConvertClaudeToolsToGeminiTools_DropsHostedWebSearchWhenMixedWithFunctions(t *testing.T) {
+	// Antigravity's v1internal endpoint rejects requests mixing built-in tools
+	// (googleSearch) with functionDeclarations (the include_server_side_tool_invocations
+	// flag it demands is ignored server-side). Mixed requests therefore keep the
+	// functions and drop the hosted search built-in.
 	tools := []any{
 		map[string]any{
 			"name":         "get_weather",
@@ -351,15 +355,55 @@ func TestConvertClaudeToolsToGeminiTools_PreservesWebSearchAlongsideFunctions(t 
 	}
 
 	result := convertClaudeToolsToGeminiTools(tools)
-	require.Len(t, result, 2)
+	require.Len(t, result, 1)
 
 	functionDecl, ok := result[0].(map[string]any)
 	require.True(t, ok)
 	funcDecls, ok := functionDecl["functionDeclarations"].([]any)
 	require.True(t, ok)
 	require.Len(t, funcDecls, 1)
+}
 
-	searchDecl, ok := result[1].(map[string]any)
+func TestConvertClaudeToolsToGeminiTools_FunctionFormWebSearchStaysFunction(t *testing.T) {
+	// Client-executed web search tools (with an executable schema, e.g. Hermes'
+	// {"type":"function","function":{"name":"web_search",...}}) must stay plain
+	// function declarations even when other functions are present.
+	tools := []any{
+		map[string]any{
+			"name":         "web_search",
+			"description":  "Search the web",
+			"input_schema": map[string]any{"type": "object", "properties": map[string]any{"q": map[string]any{"type": "string"}}},
+		},
+		map[string]any{
+			"name":         "read_file",
+			"description":  "Read a file",
+			"input_schema": map[string]any{"type": "object"},
+		},
+	}
+
+	result := convertClaudeToolsToGeminiTools(tools)
+	require.Len(t, result, 1)
+
+	functionDecl, ok := result[0].(map[string]any)
+	require.True(t, ok)
+	funcDecls, ok := functionDecl["functionDeclarations"].([]any)
+	require.True(t, ok)
+	require.Len(t, funcDecls, 2)
+	require.Equal(t, "web_search", funcDecls[0].(map[string]any)["name"])
+}
+
+func TestConvertClaudeToolsToGeminiTools_SoloHostedWebSearchKeepsBuiltin(t *testing.T) {
+	tools := []any{
+		map[string]any{
+			"type": "web_search_20250305",
+			"name": "web_search",
+		},
+	}
+
+	result := convertClaudeToolsToGeminiTools(tools)
+	require.Len(t, result, 1)
+
+	searchDecl, ok := result[0].(map[string]any)
 	require.True(t, ok)
 	googleSearch, ok := searchDecl["googleSearch"].(map[string]any)
 	require.True(t, ok)
@@ -469,16 +513,23 @@ func TestGeminiMessagesCompatServiceForward_NormalizesWebSearchToolForAIStudio(t
 	require.NoError(t, json.Unmarshal(postedBody, &posted))
 	tools, ok := posted["tools"].([]any)
 	require.True(t, ok)
-	require.Len(t, tools, 2)
+	// Hosted web_search mixed with functions is dropped (upstream 400s on
+	// built-in + functionDeclarations mixes) — only the function tools remain.
+	require.Len(t, tools, 1)
 
-	searchTool, ok := tools[1].(map[string]any)
+	functionDecl, ok := tools[0].(map[string]any)
 	require.True(t, ok)
-	_, hasSnake := searchTool["google_search"]
-	_, hasCamel := searchTool["googleSearch"]
-	require.True(t, hasSnake)
-	require.False(t, hasCamel)
-	_, hasFuncDecl := searchTool["functionDeclarations"]
-	require.False(t, hasFuncDecl)
+	funcDecls, ok := functionDecl["functionDeclarations"].([]any)
+	require.True(t, ok)
+	require.Len(t, funcDecls, 1)
+	require.Equal(t, "get_weather", funcDecls[0].(map[string]any)["name"])
+	for _, t2 := range tools {
+		tm := t2.(map[string]any)
+		_, hasSnake := tm["google_search"]
+		_, hasCamel := tm["googleSearch"]
+		require.False(t, hasSnake)
+		require.False(t, hasCamel)
+	}
 }
 
 func TestConvertClaudeMessagesToGeminiGenerateContent_AddsThoughtSignatureForToolUse(t *testing.T) {

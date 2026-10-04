@@ -170,3 +170,51 @@ func (a *Account) modelRateLimitResetAt(scope string) *time.Time {
 	}
 	return &resetAt
 }
+
+// activeModelRateLimitResetAt 返回 match 命中的限流 key 中仍然生效的最晚
+// rate_limit_reset_at；没有生效中的限流时返回 nil。
+func (a *Account) activeModelRateLimitResetAt(match func(scope string) bool) *time.Time {
+	if a == nil || a.Extra == nil {
+		return nil
+	}
+	rawLimits, ok := a.Extra[modelRateLimitsKey].(map[string]any)
+	if !ok {
+		return nil
+	}
+	now := time.Now()
+	var latest *time.Time
+	for scope := range rawLimits {
+		if match != nil && !match(scope) {
+			continue
+		}
+		resetAt := a.modelRateLimitResetAt(scope)
+		if resetAt == nil || !resetAt.After(now) {
+			continue
+		}
+		if latest == nil || resetAt.After(*latest) {
+			latest = resetAt
+		}
+	}
+	return latest
+}
+
+// antigravityGeminiScopeKey 判断限流/额度 key 是否属于 Gemini 家族
+// （family key 或 gemini-* 模型 key）。
+func antigravityGeminiScopeKey(scope string) bool {
+	return scope == antigravityGeminiModelRateLimitKey || strings.HasPrefix(scope, "gemini")
+}
+
+// antigravityClaudeScopeKey 判断限流/额度 key 是否属于 Claude/3p 家族
+// （claude-* 模型 key 或 3p-* 窗口 key）。
+func antigravityClaudeScopeKey(scope string) bool {
+	return scope == "3p-5h" || scope == "3p-weekly" || strings.HasPrefix(scope, "claude")
+}
+
+// isAntigravityWeeklyWindowKey 判断额度条目是否为周窗口（不适用 5h 限流标记）。
+func isAntigravityWeeklyWindowKey(scope string) bool {
+	switch scope {
+	case "gemini-weekly", "gemini:weekly", "3p-weekly", "claude:weekly":
+		return true
+	}
+	return false
+}

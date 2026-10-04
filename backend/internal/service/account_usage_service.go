@@ -106,21 +106,21 @@ type antigravityUsageCache struct {
 }
 
 const (
-	apiCacheTTL                 = 3 * time.Minute
-	apiErrorCacheTTL            = 1 * time.Minute        // 负缓存 TTL：429 等错误缓存 1 分钟
-	antigravityErrorTTL         = 1 * time.Minute        // Antigravity 错误缓存 TTL（可恢复错误）
-	antigravitySummaryCacheTTL  = 30 * time.Second       // Antigravity 全局用量摘要缓存 30 秒
-	apiQueryMaxJitter           = 800 * time.Millisecond // 用量查询最大随机延迟
-	windowStatsCacheTTL         = 1 * time.Minute
-	openAIProbeCacheTTL         = 10 * time.Minute
-	grokProbeRetryTTL           = 1 * time.Minute
-	grokFreeQuotaWindow         = 24 * time.Hour
-	openAICodexProbeVersion     = "0.144.1"
+	apiCacheTTL                = 3 * time.Minute
+	apiErrorCacheTTL           = 1 * time.Minute        // 负缓存 TTL：429 等错误缓存 1 分钟
+	antigravityErrorTTL        = 1 * time.Minute        // Antigravity 错误缓存 TTL（可恢复错误）
+	antigravitySummaryCacheTTL = 30 * time.Second       // Antigravity 全局用量摘要缓存 30 秒
+	apiQueryMaxJitter          = 800 * time.Millisecond // 用量查询最大随机延迟
+	windowStatsCacheTTL        = 1 * time.Minute
+	openAIProbeCacheTTL        = 10 * time.Minute
+	grokProbeRetryTTL          = 1 * time.Minute
+	grokFreeQuotaWindow        = 24 * time.Hour
+	openAICodexProbeVersion    = "0.144.1"
 )
 
 // AggregateUsageWindow 单个用量窗口的聚合数据
 type AggregateUsageWindow struct {
-	Utilization    *float64 `json:"utilization"`      // 0-100 使用率均值，未提供时为 nil
+	Utilization    *float64 `json:"utilization"` // 0-100 使用率均值，未提供时为 nil
 	SampleCount    int      `json:"sample_count"`
 	ClosestResetAt *string  `json:"closest_reset_at"` // ISO8601 最早重置时间
 	LatestResetAt  *string  `json:"latest_reset_at"`  // ISO8601 最晚重置时间
@@ -144,16 +144,16 @@ type antigravitySummaryCache struct {
 
 // UsageCache 封装账户使用量相关的缓存
 type UsageCache struct {
-	apiCache                 sync.Map           // accountID -> *apiUsageCache
-	windowStatsCache         sync.Map           // accountID -> *windowStatsCache
-	antigravityCache         sync.Map           // accountID -> *antigravityUsageCache
+	apiCache                 sync.Map // accountID -> *apiUsageCache
+	windowStatsCache         sync.Map // accountID -> *windowStatsCache
+	antigravityCache         sync.Map // accountID -> *antigravityUsageCache
 	antigravitySummaryMu     sync.RWMutex
 	antigravitySummaryData   *antigravitySummaryCache
 	apiFlight                singleflight.Group // 防止同一账号的并发请求击穿缓存（Anthropic）
 	antigravityFlight        singleflight.Group // 防止同一 Antigravity 账号的并发请求击穿缓存
 	antigravitySummaryFlight singleflight.Group
-	openAIProbeCache         sync.Map           // accountID -> time.Time
-	grokProbeCache            sync.Map           // accountID -> last billing probe attempt
+	openAIProbeCache         sync.Map // accountID -> time.Time
+	grokProbeCache           sync.Map // accountID -> last billing probe attempt
 }
 
 func (c *UsageCache) getAntigravitySummaryCache() *antigravitySummaryCache {
@@ -411,7 +411,7 @@ func (s *AccountUsageService) GetUsage(ctx context.Context, accountID int64, for
 		if err == nil {
 			s.tryClearRecoverableAccountError(ctx, account)
 		}
-		return usage, err
+		return applyAntigravityQuotaExhaustionOverlay(usage, account), err
 	}
 
 	if account.Platform == PlatformGrok {
@@ -2000,4 +2000,53 @@ func (s *AccountUsageService) computeAntigravityUsageSummary(ctx context.Context
 // 用于账号列表页面显示当前窗口费用
 func (s *AccountUsageService) GetAccountWindowStats(ctx context.Context, accountID int64, startTime time.Time) (*usagestats.AccountStats, error) {
 	return s.usageLogRepo.GetAccountWindowStats(ctx, accountID, startTime)
+}
+
+// applyAntigravityQuotaExhaustionOverlay 把网关实测的上游配额耗尽（429 写入的
+// model_rate_limits 标记）叠加到展示用额度窗口。Google 的 retrieveUserQuotaSummary /
+// fetchAvailableModels 可能仍报告窗口有剩余，但生成接口已以 “Individual quota reached”
+// 拒绝请求；用量展示必须反映账号当前实际不可调度的状态与恢复时间。
+// 返回浅拷贝，不修改入参（调用方可能持有缓存对象）。
+func applyAntigravityQuotaExhaustionOverlay(usage *UsageInfo, account *Account) *UsageInfo {
+	if usage == nil || account == nil {
+		return usage
+	}
+	gemReset := account.activeModelRateLimitResetAt(func(scope string) bool {
+		return scope == creditsExhaustedKey || antigravityGeminiScopeKey(scope)
+	})
+	claudeReset := account.activeModelRateLimitResetAt(func(scope string) bool {
+		return scope == creditsExhaustedKey || antigravityClaudeScopeKey(scope)
+	})
+	if gemReset == nil && claudeReset == nil {
+		return usage
+	}
+	if len(usage.AntigravityQuota) == 0 {
+		return usage
+	}
+
+	out := *usage
+	out.AntigravityQuota = make(map[string]*AntigravityModelQuota, len(usage.AntigravityQuota))
+	for name, quota := range usage.AntigravityQuota {
+		if quota == nil {
+			out.AntigravityQuota[name] = quota
+			continue
+		}
+		var resetAt *time.Time
+		switch {
+		case isAntigravityWeeklyWindowKey(name):
+		case gemReset != nil && antigravityGeminiScopeKey(name):
+			resetAt = gemReset
+		case claudeReset != nil && antigravityClaudeScopeKey(name):
+			resetAt = claudeReset
+		}
+		if resetAt == nil {
+			out.AntigravityQuota[name] = quota
+			continue
+		}
+		clamped := *quota
+		clamped.Utilization = 100
+		clamped.ResetTime = resetAt.UTC().Format(time.RFC3339)
+		out.AntigravityQuota[name] = &clamped
+	}
+	return &out
 }

@@ -126,6 +126,9 @@ var DefaultAntigravityModelMapping = map[string]string{
 	// Gemini 3.6 白名单
 	"gemini-3.6-flash":      "gemini-3.6-flash-high",
 	"gemini-3.6-flash-high": "gemini-3.6-flash-high",
+
+	// Gemini 3.5 白名单
+	"gemini-3.5-flash-lite": "gemini-3.5-flash-lite",
 	// Gemini 3.1 白名单
 	"gemini-3.1-flash-lite":          "gemini-3.1-flash-lite",
 	"gemini-3.1-flash-lite-preview":  "gemini-3.1-flash-lite",

@@ -741,6 +741,10 @@ func (s *GeminiMessagesCompatService) handleChatCompletionsStreamingResponseFrom
 						}
 
 						for _, part := range extractGeminiParts(geminiResp) {
+							if thought, _ := part["thought"].(bool); thought {
+								// 思考 part 不进入正文（聊天内容保持干净；思考 tokens 仍计入 usage）。
+								continue
+							}
 							if text, ok := part["text"].(string); ok && text != "" {
 								if openToolIndex >= 0 {
 									if closeOpenTool() {

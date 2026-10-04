@@ -2085,6 +2085,10 @@ func (s *GeminiMessagesCompatService) handleStreamingResponse(c *gin.Context, re
 
 		parts := extractGeminiParts(geminiResp)
 		for _, part := range parts {
+			if thought, _ := part["thought"].(bool); thought {
+				// 思考 part 不进入正文：消息/聊天格式无 thinking 块语义，可见思考走原生端点。
+				continue
+			}
 			if text, ok := part["text"].(string); ok && text != "" {
 				// Close an open tool_use block before starting text, mirroring
 				// the functionCall branch (which closes open text blocks) and
@@ -2763,6 +2767,10 @@ func convertGeminiToClaudeMessage(geminiResp map[string]any, originalModel strin
 					for _, part := range parts {
 						pm, ok := part.(map[string]any)
 						if !ok {
+							continue
+						}
+						if thought, _ := pm["thought"].(bool); thought {
+							// 思考 part 不进入正文（聊天内容保持干净；思考 tokens 仍计入 usage）。
 							continue
 						}
 						if text, ok := pm["text"].(string); ok && text != "" {

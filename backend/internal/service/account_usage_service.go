@@ -411,7 +411,7 @@ func (s *AccountUsageService) GetUsage(ctx context.Context, accountID int64, for
 		if err == nil {
 			s.tryClearRecoverableAccountError(ctx, account)
 		}
-		return applyAntigravityQuotaExhaustionOverlay(usage, account), err
+		return s.applyAntigravityQuotaDisplayOverlay(ctx, usage, account), err
 	}
 
 	if account.Platform == PlatformGrok {

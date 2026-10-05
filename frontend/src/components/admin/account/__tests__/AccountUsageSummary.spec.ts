@@ -154,4 +154,20 @@ describe('AccountUsageSummary.vue', () => {
     await refreshBtn.trigger('click')
     expect(wrapper.emitted('refresh')).toBeTruthy()
   })
+
+  it('shows gateway usage under a window when local_usage is present', () => {
+    const wrapper = mount(AccountUsageSummary, {
+      props: {
+        summary: {
+          ...mockSummary,
+          claude_7d: { ...mockSummary.claude_7d, local_usage: { requests: 400, tokens: 900000, cost: 6.83 } }
+        },
+        loading: false,
+        error: null
+      }
+    })
+
+    expect(wrapper.text()).toContain('admin.accounts.summary.gatewayUsage')
+    expect(wrapper.text()).toContain('admin.accounts.summary.unavailable')
+  })
 })

@@ -124,6 +124,8 @@ type AggregateUsageWindow struct {
 	SampleCount    int      `json:"sample_count"`
 	ClosestResetAt *string  `json:"closest_reset_at"` // ISO8601 最早重置时间
 	LatestResetAt  *string  `json:"latest_reset_at"`  // ISO8601 最晚重置时间
+	// LocalUsage 本网关 usage_logs 记录的该窗口真实用量（所有采样账号求和）
+	LocalUsage *WindowStats `json:"local_usage,omitempty"`
 }
 
 // AntigravityUsageSummary Antigravity OAuth 账号的全局用量聚合摘要
@@ -203,6 +205,14 @@ type UsageProgress struct {
 type AntigravityModelQuota struct {
 	Utilization int    `json:"utilization"` // 使用率 0-100
 	ResetTime   string `json:"reset_time"`  // 重置时间 ISO8601
+	// UsedPercent 上游 remainingFraction 换算的精确使用率（Utilization 为兼容调度逻辑保留截断整数）
+	UsedPercent float64 `json:"used_percent,omitempty"`
+	// Empty 上游报告窗口完全未使用（remainingFraction=1）；此时 resetTime 是随探测
+	// 漂移的占位值（探测时刻 + 窗口长度），不代表真实重置时间。
+	Empty bool `json:"empty,omitempty"`
+	// Unmetered 上游计量不可用：Claude(3p) 窗口在真实用量后仍报告空窗口，
+	// 展示层应显示“无数据”而非 0%。
+	Unmetered bool `json:"unmetered,omitempty"`
 }
 
 // AntigravityModelDetail Antigravity 单个模型的详细能力信息
@@ -241,6 +251,9 @@ type UsageInfo struct {
 
 	// Antigravity 多模型配额
 	AntigravityQuota map[string]*AntigravityModelQuota `json:"antigravity_quota,omitempty"`
+	// AntigravityLocalUsage 本网关 usage_logs 记录的真实用量，按展示窗口分组：
+	// gemini_5h / gemini_7d / claude_5h / claude_7d
+	AntigravityLocalUsage map[string]*WindowStats `json:"antigravity_local_usage,omitempty"`
 
 	// Grok / xAI 被动额度快照
 	GrokRequestQuota       *xai.QuotaWindow    `json:"grok_request_quota,omitempty"`
@@ -504,7 +517,7 @@ func (s *AccountUsageService) GetUsage(ctx context.Context, accountID int64, for
 		}
 
 		s.tryClearRecoverableAccountError(ctx, account)
-		return s.applyAnthropicUsageDisplayOverlay(ctx, usage, account), nil
+		return usage, nil
 	}
 
 	// Setup Token账号：根据session_window推算（没有profile scope，无法调用usage API）
@@ -512,7 +525,7 @@ func (s *AccountUsageService) GetUsage(ctx context.Context, accountID int64, for
 		usage := s.estimateSetupTokenUsage(account)
 		// 添加窗口统计
 		s.addWindowStats(ctx, account, usage)
-		return s.applyAnthropicUsageDisplayOverlay(ctx, usage, account), nil
+		return usage, nil
 	}
 
 	// API Key账号不支持usage查询
@@ -553,7 +566,7 @@ func (s *AccountUsageService) GetPassiveUsage(ctx context.Context, accountID int
 	// 添加窗口统计
 	s.addWindowStats(ctx, account, info)
 
-	return s.applyAnthropicUsageDisplayOverlay(ctx, info, account), nil
+	return info, nil
 }
 
 // buildPassiveUsageWindow 从 Extra 中的被动采样数据（utilization 为 0-1 小数、reset 为 Unix 秒）
@@ -1885,6 +1898,7 @@ func (s *AccountUsageService) computeAntigravityUsageSummary(ctx context.Context
 	var gemini5hSum, gemini7dSum, claude5hSum, claude7dSum float64
 	var gemini5hCount, gemini7dCount, claude5hCount, claude7dCount int
 	var gemini5hResets, gemini7dResets, claude5hResets, claude7dResets []string
+	var gemini5hLocal, gemini7dLocal, claude5hLocal, claude7dLocal *WindowStats
 
 	for _, res := range results {
 		if res.err != nil || res.usage == nil || res.usage.Error != "" {
@@ -1892,7 +1906,15 @@ func (s *AccountUsageService) computeAntigravityUsageSummary(ctx context.Context
 			continue
 		}
 
-		quota := res.usage.AntigravityQuota
+		if local := res.usage.AntigravityLocalUsage; local != nil {
+			gemini5hLocal = addWindowStats(gemini5hLocal, local[antigravityLocalUsageGemini5h])
+			gemini7dLocal = addWindowStats(gemini7dLocal, local[antigravityLocalUsageGemini7d])
+			claude5hLocal = addWindowStats(claude5hLocal, local[antigravityLocalUsageClaude5h])
+			claude7dLocal = addWindowStats(claude7dLocal, local[antigravityLocalUsageClaude7d])
+		}
+
+		// 上游不计量的窗口（Claude 空窗口）不参与均值，避免把“无数据”平均成 0%。
+		quota := antigravityMeteredQuota(res.usage.AntigravityQuota)
 		if len(quota) == 0 {
 			continue
 		}
@@ -1987,14 +2009,19 @@ func (s *AccountUsageService) computeAntigravityUsageSummary(ctx context.Context
 		}
 	}
 
+	withLocal := func(window *AggregateUsageWindow, local *WindowStats) *AggregateUsageWindow {
+		window.LocalUsage = local
+		return window
+	}
+
 	now := time.Now()
 	return &AntigravityUsageSummary{
 		EligibleAccounts: totalEligible,
 		FailedAccounts:   failedCount,
-		Gemini5h:         makeWindow(gemini5hSum, gemini5hCount, gemini5hResets),
-		Gemini7d:         makeWindow(gemini7dSum, gemini7dCount, gemini7dResets),
-		Claude5h:         makeWindow(claude5hSum, claude5hCount, claude5hResets),
-		Claude7d:         makeWindow(claude7dSum, claude7dCount, claude7dResets),
+		Gemini5h:         withLocal(makeWindow(gemini5hSum, gemini5hCount, gemini5hResets), gemini5hLocal),
+		Gemini7d:         withLocal(makeWindow(gemini7dSum, gemini7dCount, gemini7dResets), gemini7dLocal),
+		Claude5h:         withLocal(makeWindow(claude5hSum, claude5hCount, claude5hResets), claude5hLocal),
+		Claude7d:         withLocal(makeWindow(claude7dSum, claude7dCount, claude7dResets), claude7dLocal),
 		UpdatedAt:        now,
 	}, nil
 }
@@ -2048,6 +2075,9 @@ func applyAntigravityQuotaExhaustionOverlay(usage *UsageInfo, account *Account) 
 		}
 		clamped := *quota
 		clamped.Utilization = 100
+		clamped.UsedPercent = 100
+		clamped.Empty = false
+		clamped.Unmetered = false
 		clamped.ResetTime = resetAt.UTC().Format(time.RFC3339)
 		out.AntigravityQuota[name] = &clamped
 	}

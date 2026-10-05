@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -9,124 +10,159 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSplitAntigravityFamilyCosts(t *testing.T) {
-	stats := []usagestats.ModelStat{
-		{Model: "gemini-3.8-flash", AccountCost: 10},
-		{Model: "gemini-3.1-flash-lite", AccountCost: 5},
-		{Model: "claude-opus-5-5", AccountCost: 7},
-		{Model: "gpt-oss-120b-medium", AccountCost: 3},
-	}
-	gemini, other := splitAntigravityFamilyCosts(stats)
-	assert.Equal(t, 15.0, gemini)
-	assert.Equal(t, 10.0, other)
+type antigravityDisplayUsageLogRepo struct {
+	UsageLogRepository
+	stats  []usagestats.ModelStat
+	starts []time.Time
 }
 
-func TestAntigravityWindowDisplayUsed(t *testing.T) {
-	assert.Equal(t, 45, antigravityWindowDisplayUsed(45, false, 0, 0))
-	assert.Equal(t, 100, antigravityWindowDisplayUsed(45, true, 0, 0))
-	assert.Equal(t, 60, antigravityWindowDisplayUsed(45, false, 30, 50))
-	assert.Equal(t, 45, antigravityWindowDisplayUsed(45, false, 10, 50))
-	assert.Equal(t, 45, antigravityWindowDisplayUsed(45, false, 30, 0))
-	assert.Equal(t, 100, antigravityWindowDisplayUsed(45, false, 90, 50))
-	assert.Equal(t, 0, antigravityWindowDisplayUsed(-5, false, 0, 0))
+func (r *antigravityDisplayUsageLogRepo) GetModelStatsWithFilters(_ context.Context, startTime, _ time.Time, _, _, _, _ int64, _ *int16, _ *bool, _ *int8) ([]usagestats.ModelStat, error) {
+	r.starts = append(r.starts, startTime)
+	return r.stats, nil
 }
 
-func TestAntigravityCalibrationLimitFromSample(t *testing.T) {
-	limit, ok := antigravityCalibrationLimitFromSample(50, 25)
-	require.True(t, ok)
-	assert.Equal(t, 50.0, limit)
+func TestNewAntigravityModelQuota(t *testing.T) {
+	q := newAntigravityModelQuota(0.9952381, "2026-10-05T07:35:39Z")
+	assert.Equal(t, 0, q.Utilization, "scheduler-facing utilization keeps truncation")
+	assert.InDelta(t, 0.47619, q.UsedPercent, 1e-4)
+	assert.False(t, q.Empty)
 
-	_, ok = antigravityCalibrationLimitFromSample(1, 25)
-	assert.False(t, ok, "near-empty window cannot calibrate")
-	_, ok = antigravityCalibrationLimitFromSample(100, 25)
-	assert.False(t, ok, "exhausted window cannot calibrate")
-	_, ok = antigravityCalibrationLimitFromSample(50, 0)
-	assert.False(t, ok, "no local cost cannot calibrate")
-}
+	empty := newAntigravityModelQuota(1, "2026-10-12T03:26:25Z")
+	assert.True(t, empty.Empty, "remainingFraction=1 is an empty window with a placeholder reset")
+	assert.Equal(t, 0.0, empty.UsedPercent)
 
-func TestAntigravityQuotaCalibrationLimitFor(t *testing.T) {
-	resetAntigravityQuotaCalibrationForTest()
-	now := time.Now()
-	key := antigravityWindowKey5h("gemini")
-
-	_, ok := antigravityQuotaCalibrationState.limitFor(1, key, now)
-	assert.False(t, ok)
-
-	antigravityQuotaCalibrationState.observe(1, key, 100, now)
-	limit, ok := antigravityQuotaCalibrationState.limitFor(1, key, now)
-	require.True(t, ok)
-	assert.Equal(t, 100.0, limit)
-
-	antigravityQuotaCalibrationState.observe(2, key, 200, now)
-	antigravityQuotaCalibrationState.observe(4, key, 300, now)
-	limit, ok = antigravityQuotaCalibrationState.limitFor(3, key, now)
-	require.True(t, ok)
-	assert.Equal(t, 200.0, limit, "cold account borrows the median of other accounts")
-
-	_, ok = antigravityQuotaCalibrationState.limitFor(3, key, now.Add(25*time.Hour))
-	assert.False(t, ok, "borrowed samples expire after the TTL")
-
-	antigravityQuotaCalibrationState.observe(1, key, 999, now.Add(-25*time.Hour))
-	limit, ok = antigravityQuotaCalibrationState.limitFor(1, key, now)
-	require.True(t, ok)
-	assert.Equal(t, 250.0, limit, "stale own sample is skipped in favor of fresh fallback")
+	clamped := newAntigravityModelQuota(-0.2, "")
+	assert.Equal(t, 100, clamped.Utilization)
 }
 
 func TestAntigravityComposeDisplayOverlay(t *testing.T) {
-	t.Run("rolling cost raises 5h and weekly independently after window roll", func(t *testing.T) {
-		resetAntigravityQuotaCalibrationForTest()
-		now := time.Now()
+	usage := &UsageInfo{AntigravityQuota: map[string]*AntigravityModelQuota{
+		// 实测 2026-10-05：#5 gemini-5h remaining=0.5575459
+		"gemini-5h":     newAntigravityModelQuota(0.5575459, "2026-10-05T04:45:07Z"),
+		"gemini-weekly": newAntigravityModelQuota(0.996, "2026-10-11T05:11:10Z"),
+		// Claude 窗口在真实用量后仍是 remaining=1 + 占位重置时间
+		"3p-5h":                    newAntigravityModelQuota(1, "2026-10-05T08:26:35Z"),
+		"3p-weekly":                newAntigravityModelQuota(1, "2026-10-12T03:26:35Z"),
+		"claude-opus-4-6-thinking": newAntigravityModelQuota(1, "2026-10-05T08:26:36Z"),
+		"gemini-3.5-flash-lite":    newAntigravityModelQuota(1, "2026-10-05T08:26:36Z"),
+	}}
 
-		// 校准样本：上游窗口仍有效（2%~98%）时反推上限。
-		warm := &UsageInfo{AntigravityQuota: map[string]*AntigravityModelQuota{
-			"gemini-5h":     {Utilization: 50},
-			"gemini-weekly": {Utilization: 20},
-			"3p-5h":         {Utilization: 25},
-			"3p-weekly":     {Utilization: 10},
-		}}
-		out := antigravityComposeDisplayOverlay(warm, &Account{ID: 1}, now, 25, 5, 40, 18)
-		require.NotNil(t, out)
-		// 上限：gemini 5h=50, gemini 7d=200, 3p 5h=20, 3p 7d=180。
+	out := antigravityComposeDisplayOverlay(usage)
+	require.NotNil(t, out)
 
-		// 窗口重建后的账号：上游读数为 0，但真实滚动成本仍在。
-		usage := &UsageInfo{AntigravityQuota: map[string]*AntigravityModelQuota{
-			"gemini-5h":     {Utilization: 0, ResetTime: "2026-10-04T13:18:32Z"},
-			"gemini-weekly": {Utilization: 0, ResetTime: "2026-10-11T05:10:45Z"},
-			"3p-5h":         {Utilization: 0, ResetTime: "2026-10-04T13:38:18Z"},
-			"3p-weekly":     {Utilization: 0, ResetTime: "2026-10-11T08:38:18Z"},
-		}}
-		out = antigravityComposeDisplayOverlay(usage, &Account{ID: 2}, now, 30, 1, 150, 2)
-		require.NotNil(t, out)
-		assert.Equal(t, 60, out.AntigravityQuota["gemini-5h"].Utilization, "30/50 = 60% of calibrated 5h limit")
-		assert.Equal(t, 75, out.AntigravityQuota["gemini-weekly"].Utilization, "150/200 = 75% of calibrated 7d limit")
-		assert.Equal(t, 5, out.AntigravityQuota["3p-5h"].Utilization, "1/20 = 5% of calibrated 5h limit")
-		assert.Equal(t, 1, out.AntigravityQuota["3p-weekly"].Utilization, "2/180 rounds to 1% of calibrated 7d limit")
+	assert.Equal(t, 44, out.AntigravityQuota["gemini-5h"].Utilization, "44.25% rounds to 44")
+	assert.Equal(t, "2026-10-05T04:45:07Z", out.AntigravityQuota["gemini-5h"].ResetTime, "real reset kept")
+	assert.Equal(t, 1, out.AntigravityQuota["gemini-weekly"].Utilization, "0.4% shows as 1%, never 0%")
 
-		assert.Equal(t, 0, usage.AntigravityQuota["gemini-5h"].Utilization, "source must not be mutated")
-	})
+	for _, name := range []string{"3p-5h", "3p-weekly", "claude-opus-4-6-thinking"} {
+		entry := out.AntigravityQuota[name]
+		assert.True(t, entry.Unmetered, "%s: empty Claude window is unmetered", name)
+		assert.Empty(t, entry.ResetTime, "%s: placeholder countdown removed", name)
+	}
+	lite := out.AntigravityQuota["gemini-3.5-flash-lite"]
+	assert.False(t, lite.Unmetered, "an empty Gemini window is a real 0%")
+	assert.Equal(t, 0, lite.Utilization)
+	assert.Empty(t, lite.ResetTime)
 
-	t.Run("raise only and stamp floor preserved", func(t *testing.T) {
-		resetAntigravityQuotaCalibrationForTest()
-		now := time.Now()
-		usage := &UsageInfo{AntigravityQuota: map[string]*AntigravityModelQuota{
-			"gemini-5h":     {Utilization: 100, ResetTime: "2026-10-04T07:50:52Z"},
-			"gemini-weekly": {Utilization: 80, ResetTime: "2026-10-08T13:05:29Z"},
-		}}
+	// 缓存对象不被修改
+	assert.Equal(t, 0, usage.AntigravityQuota["gemini-weekly"].Utilization)
+	assert.Equal(t, "2026-10-12T03:26:35Z", usage.AntigravityQuota["3p-weekly"].ResetTime)
+	assert.False(t, usage.AntigravityQuota["3p-weekly"].Unmetered)
+}
 
-		out := antigravityComposeDisplayOverlay(usage, &Account{ID: 3}, now, 5, 0, 10, 0)
-		require.NotNil(t, out)
-		assert.Equal(t, 100, out.AntigravityQuota["gemini-5h"].Utilization)
-		assert.Equal(t, 80, out.AntigravityQuota["gemini-weekly"].Utilization, "lower local readings never reduce provider values")
-	})
+func TestAntigravityDisplayOverlayKeepsExhaustionStamp(t *testing.T) {
+	reset := time.Now().Add(2 * time.Hour).UTC().Truncate(time.Second)
+	account := &Account{ID: 9, Platform: PlatformAntigravity, Extra: map[string]any{
+		"model_rate_limits": map[string]any{
+			"claude-opus-4-6-thinking": map[string]any{
+				"rate_limited_at":     time.Now().Add(-time.Minute).UTC().Format(time.RFC3339),
+				"rate_limit_reset_at": reset.Format(time.RFC3339),
+			},
+		},
+	}}
+	usage := &UsageInfo{AntigravityQuota: map[string]*AntigravityModelQuota{
+		"3p-5h":     newAntigravityModelQuota(1, "2026-10-05T08:26:35Z"),
+		"3p-weekly": newAntigravityModelQuota(1, "2026-10-12T03:26:35Z"),
+	}}
 
-	t.Run("no calibration falls back to provider values", func(t *testing.T) {
-		resetAntigravityQuotaCalibrationForTest()
-		now := time.Now()
-		usage := &UsageInfo{AntigravityQuota: map[string]*AntigravityModelQuota{
-			"gemini-5h": {Utilization: 45, ResetTime: "2026-10-04T09:36:19Z"},
-		}}
-		out := antigravityComposeDisplayOverlay(usage, &Account{ID: 4}, now, 100, 0, 100, 0)
-		require.NotNil(t, out)
-		assert.Equal(t, 45, out.AntigravityQuota["gemini-5h"].Utilization)
-	})
+	out := antigravityComposeDisplayOverlay(applyAntigravityQuotaExhaustionOverlay(usage, account))
+	require.NotNil(t, out)
+	five := out.AntigravityQuota["3p-5h"]
+	assert.Equal(t, 100, five.Utilization, "upstream 429 pins the 5h window")
+	assert.False(t, five.Unmetered)
+	assert.Equal(t, reset.Format(time.RFC3339), five.ResetTime)
+	assert.True(t, out.AntigravityQuota["3p-weekly"].Unmetered, "weekly window is not stamped")
+}
+
+func TestAntigravityLocalWindowStart(t *testing.T) {
+	now := time.Date(2026, 10, 5, 3, 26, 0, 0, time.UTC)
+	w5h := antigravityLocalUsageWindows[0]
+
+	aligned := antigravityLocalWindowStart(map[string]*AntigravityModelQuota{
+		"gemini-5h": {UsedPercent: 44, ResetTime: "2026-10-05T04:45:07Z"},
+	}, w5h, now)
+	assert.Equal(t, time.Date(2026, 10, 4, 23, 45, 7, 0, time.UTC), aligned, "aligned to reset - 5h")
+
+	trailing := antigravityLocalWindowStart(map[string]*AntigravityModelQuota{
+		"gemini-5h": {Empty: true},
+	}, w5h, now)
+	assert.Equal(t, now.Add(-5*time.Hour), trailing, "empty window falls back to trailing 5h")
+
+	expired := antigravityLocalWindowStart(map[string]*AntigravityModelQuota{
+		"gemini-5h": {UsedPercent: 10, ResetTime: "2026-10-05T03:00:00Z"},
+	}, w5h, now)
+	assert.Equal(t, now.Add(-5*time.Hour), expired)
+}
+
+func TestApplyAntigravityQuotaDisplayOverlayAttachesLocalUsage(t *testing.T) {
+	repo := &antigravityDisplayUsageLogRepo{stats: []usagestats.ModelStat{
+		{Model: "gemini-3.8-flash", Requests: 61, TotalTokens: 1_000_000, AccountCost: 1.5, Cost: 1.5, ActualCost: 1.5},
+		{Model: "gemini-3.5-flash-lite", Requests: 10, TotalTokens: 10_000, AccountCost: 0.1, Cost: 0.1, ActualCost: 0.1},
+		{Model: "claude-opus-4-6", Requests: 22, TotalTokens: 41_726, AccountCost: 0.42, Cost: 0.42, ActualCost: 0.42},
+	}}
+	svc := &AccountUsageService{usageLogRepo: repo}
+	reset := time.Now().Add(80 * time.Minute).UTC().Truncate(time.Second)
+	usage := &UsageInfo{AntigravityQuota: map[string]*AntigravityModelQuota{
+		"gemini-5h":     newAntigravityModelQuota(0.55, reset.Format(time.RFC3339)),
+		"gemini-weekly": newAntigravityModelQuota(0.9, "2026-10-11T05:11:10Z"),
+		"3p-5h":         newAntigravityModelQuota(1, "2026-10-05T08:26:35Z"),
+		"3p-weekly":     newAntigravityModelQuota(1, "2026-10-12T03:26:35Z"),
+	}}
+
+	out := svc.applyAntigravityQuotaDisplayOverlay(context.Background(), usage, &Account{ID: 5, Platform: PlatformAntigravity})
+	require.NotNil(t, out)
+	require.NotNil(t, out.AntigravityLocalUsage)
+
+	gem := out.AntigravityLocalUsage[antigravityLocalUsageGemini5h]
+	require.NotNil(t, gem)
+	assert.Equal(t, int64(71), gem.Requests)
+	assert.InDelta(t, 1.6, gem.Cost, 1e-9)
+
+	claude7d := out.AntigravityLocalUsage[antigravityLocalUsageClaude7d]
+	require.NotNil(t, claude7d)
+	assert.Equal(t, int64(22), claude7d.Requests, "Claude 7d shows real gateway usage even though the meter is unmetered")
+	assert.InDelta(t, 0.42, claude7d.Cost, 1e-9)
+
+	assert.Nil(t, usage.AntigravityLocalUsage, "cached source untouched")
+	assert.LessOrEqual(t, len(repo.starts), 4)
+	assert.Contains(t, repo.starts, reset.Add(-5*time.Hour), "gemini 5h stats aligned to the provider window")
+}
+
+func TestAntigravityMeteredQuotaAndAddWindowStats(t *testing.T) {
+	quota := map[string]*AntigravityModelQuota{
+		"3p-5h":     {Unmetered: true},
+		"gemini-5h": {Utilization: 10},
+	}
+	metered := antigravityMeteredQuota(quota)
+	assert.Len(t, metered, 1)
+	_, ok := metered["3p-5h"]
+	assert.False(t, ok)
+	_, _, ok = ExtractClaude5hUtilization(metered)
+	assert.False(t, ok, "aggregate skips an unmetered Claude window instead of averaging it as 0%")
+
+	total := addWindowStats(nil, &WindowStats{Requests: 2, Cost: 1})
+	total = addWindowStats(total, &WindowStats{Requests: 3, Cost: 0.5})
+	total = addWindowStats(total, nil)
+	assert.Equal(t, int64(5), total.Requests)
+	assert.InDelta(t, 1.5, total.Cost, 1e-9)
 }

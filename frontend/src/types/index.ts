@@ -1071,7 +1071,10 @@ export interface UsageProgress {
 // Antigravity 单个模型的配额信息
 export interface AntigravityModelQuota {
   utilization: number // 使用率 0-100
-  reset_time: string  // 重置时间 ISO8601
+  reset_time: string  // 重置时间 ISO8601（空窗口为空字符串）
+  used_percent?: number // 上游精确使用率
+  empty?: boolean       // 上游报告窗口未使用
+  unmetered?: boolean   // 上游不计量（Claude 空窗口），展示为“无数据”
 }
 
 export interface GrokQuotaWindow {
@@ -1123,6 +1126,8 @@ export interface AccountUsageInfo {
   gemini_pro_minute?: UsageProgress | null
   gemini_flash_minute?: UsageProgress | null
   antigravity_quota?: Record<string, AntigravityModelQuota> | null
+  // 本网关记录的真实用量：gemini_5h / gemini_7d / claude_5h / claude_7d
+  antigravity_local_usage?: Record<string, WindowStats> | null
   grok_request_quota?: GrokQuotaWindow | null
   grok_token_quota?: GrokQuotaWindow | null
   grok_retry_after_seconds?: number | null
@@ -1166,6 +1171,7 @@ export interface AggregateUsageWindow {
   sample_count: number
   closest_reset_at?: string | null
   latest_reset_at?: string | null
+  local_usage?: WindowStats | null // 本网关记录的真实用量（全部采样账号求和）
 }
 
 export interface AntigravityUsageSummary {

@@ -1284,6 +1284,7 @@ export default {
         resetClosest: 'Closest reset',
         resetLatest: 'Latest reset',
         unavailable: 'N/A',
+        gatewayUsage: 'Gateway: {requests} req · {tokens} tok · ${cost}',
         explanationTooltip: 'Percentages represent the arithmetic mean utilization across all eligible Antigravity OAuth accounts.'
       },
       usageWindow: {
@@ -1291,7 +1292,7 @@ export default {
         statsTitleDaily: 'Daily Usage Statistics',
         geminiProDaily: 'Pro',
         geminiFlashDaily: 'Flash',
-        providerQuotaLegend: 'Provider quota used · resets in',
+        providerQuotaLegend: 'Provider quota used · resets in (above each bar: requests served by this gateway in that window)',
         gemini: 'Gemini',
         claude: 'Claude',
         fiveHourShort: '5h',
@@ -1300,6 +1301,8 @@ export default {
         gemini7dHint: 'Gemini seven-day provider quota used',
         claude5hHint: 'Claude five-hour provider quota used through Google Antigravity',
         claude7dHint: 'Claude seven-day provider quota used through Google Antigravity',
+        meterUnavailable: 'n/a',
+        unmeteredHint: 'Google does not report Claude usage for this window (its meter stays empty even after real use). The figures above the bar are the requests, tokens and cost served by this gateway in the window.',
         grokRequests: 'Req',
         grokTokens: 'Tok',
         grokFreeQuota24hHint: 'Estimated from local token usage over the rolling 24-hour window ({limit} limit)',

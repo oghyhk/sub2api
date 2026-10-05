@@ -350,6 +350,7 @@ export default {
         resetClosest: '最早重置',
         resetLatest: '最晚重置',
         unavailable: '暂无数据',
+        gatewayUsage: '网关实际：{requests} 次 · {tokens} tok · ${cost}',
         explanationTooltip: '百分比表示所有符合条件的 Antigravity OAuth 账号算术平均使用率。'
       },
       usageWindow: {
@@ -357,7 +358,7 @@ export default {
         statsTitleDaily: '每日用量统计',
         geminiProDaily: 'Pro',
         geminiFlashDaily: 'Flash',
-        providerQuotaLegend: '上游配额已用 · 距离重置',
+        providerQuotaLegend: '上游配额已用 · 距离重置（条形上方为本网关在该窗口内的请求量）',
         gemini: 'Gemini',
         claude: 'Claude',
         fiveHourShort: '5h',
@@ -366,6 +367,8 @@ export default {
         gemini7dHint: 'Gemini 上游 7 天配额已用',
         claude5hHint: 'Google Antigravity Claude 上游 5 小时配额已用',
         claude7dHint: 'Google Antigravity Claude 上游 7 天配额已用',
+        meterUnavailable: '无数据',
+        unmeteredHint: 'Google 不上报该窗口的 Claude 用量（真实使用后计量仍为空）。条形上方为本网关在该窗口内记录的请求数、tokens 与成本。',
         grokRequests: '请求',
         grokTokens: 'Token',
         grokFreeQuota24hHint: '按 sub2api 近 24 小时本地 Token 用量估算（上限 {limit}）',

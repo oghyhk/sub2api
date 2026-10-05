@@ -1427,4 +1427,43 @@ describe('AccountUsageCell', () => {
     expect(wrapper.text()).not.toContain('7d S')
     expect(wrapper.text()).not.toContain('7d F')
   })
+
+  it('Antigravity Claude 窗口上游不计量时显示无数据并附带网关真实用量', async () => {
+    getUsage.mockResolvedValue({
+      antigravity_quota: {
+        'gemini-5h': { utilization: 44, reset_time: '2026-03-01T10:00:00Z', used_percent: 44.2 },
+        'gemini-weekly': { utilization: 10, reset_time: '2026-03-07T10:00:00Z', used_percent: 10 },
+        '3p-5h': { utilization: 0, reset_time: '', empty: true, unmetered: true },
+        '3p-weekly': { utilization: 0, reset_time: '', empty: true, unmetered: true },
+        'claude-opus-4-6-thinking': { utilization: 0, reset_time: '', empty: true, unmetered: true }
+      },
+      antigravity_local_usage: {
+        gemini_5h: { requests: 61, tokens: 1134189, cost: 1.6 },
+        claude_7d: { requests: 62, tokens: 122869, cost: 1.15 }
+      }
+    })
+
+    const wrapper = mount(AccountUsageCell, {
+      props: { account: makeAccount({ id: 1004, platform: 'antigravity', type: 'oauth', extra: {} }) },
+      global: {
+        stubs: {
+          UsageProgressBar: {
+            props: ['label', 'utilization', 'resetsAt', 'color', 'unavailable', 'windowStats'],
+            template: '<div class="usage-bar">{{ label }}|{{ utilization }}|{{ unavailable }}|{{ windowStats ? windowStats.requests : "-" }}</div>'
+          },
+          AccountQuotaInfo: true
+        }
+      }
+    })
+
+    await flushPromises()
+
+    const bars = wrapper.findAll('.usage-bar').map((bar) => bar.text())
+    expect(bars).toEqual([
+      'admin.accounts.usageWindow.fiveHourShort|44|false|61',
+      'admin.accounts.usageWindow.sevenDayShort|10|false|-',
+      'admin.accounts.usageWindow.fiveHourShort|0|true|-',
+      'admin.accounts.usageWindow.sevenDayShort|0|true|62'
+    ])
+  })
 })

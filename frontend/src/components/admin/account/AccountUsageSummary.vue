@@ -129,6 +129,9 @@
                 </span>
               </span>
             </div>
+            <div v-if="summary.gemini_5h.local_usage" class="text-[10px] text-gray-500 dark:text-gray-400">
+              {{ formatGatewayUsage(summary.gemini_5h.local_usage) }}
+            </div>
           </div>
 
           <!-- Gemini 7d -->
@@ -171,6 +174,9 @@
                   {{ formatCountdown(summary.gemini_7d.latest_reset_at) }}
                 </span>
               </span>
+            </div>
+            <div v-if="summary.gemini_7d.local_usage" class="text-[10px] text-gray-500 dark:text-gray-400">
+              {{ formatGatewayUsage(summary.gemini_7d.local_usage) }}
             </div>
           </div>
         </div>
@@ -230,6 +236,9 @@
                 </span>
               </span>
             </div>
+            <div v-if="summary.claude_5h.local_usage" class="text-[10px] text-gray-500 dark:text-gray-400">
+              {{ formatGatewayUsage(summary.claude_5h.local_usage) }}
+            </div>
           </div>
 
           <!-- Claude 7d -->
@@ -273,6 +282,9 @@
                 </span>
               </span>
             </div>
+            <div v-if="summary.claude_7d.local_usage" class="text-[10px] text-gray-500 dark:text-gray-400">
+              {{ formatGatewayUsage(summary.claude_7d.local_usage) }}
+            </div>
           </div>
         </div>
       </div>
@@ -284,7 +296,8 @@
 import { computed, ref } from 'vue'
 import { useIntervalFn } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
-import type { AntigravityUsageSummary } from '@/types'
+import type { AntigravityUsageSummary, WindowStats } from '@/types'
+import { formatCompactNumber } from '@/utils/format'
 import Icon from '@/components/icons/Icon.vue'
 
 const props = defineProps<{
@@ -335,6 +348,14 @@ function formatCountdown(resetsAt?: string | null): string {
   } catch {
     return '-'
   }
+}
+
+function formatGatewayUsage(stats: WindowStats): string {
+  return t('admin.accounts.summary.gatewayUsage', {
+    requests: formatCompactNumber(stats.requests, { allowBillions: false }),
+    tokens: formatCompactNumber(stats.tokens),
+    cost: (stats.cost ?? 0).toFixed(2)
+  })
 }
 
 function clampPercent(val: number | null): number {

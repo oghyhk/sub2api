@@ -10,6 +10,10 @@ import (
 
 const (
 	weeklyWarmupRefreshInterval = 2 * time.Minute
+	// A weekly bucket already known to read 0% is re-probed far less often: the
+	// Claude (3p) weekly bucket never moves off 0%, so the 2-minute interval made
+	// every Claude request fire a quota probe at every account at the same instant.
+	weeklyWarmupKnownZeroRefreshInterval = 30 * time.Minute
 	// Weekly usage remains in warm-up until the provider reports at least 1%.
 	// Keep this threshold centralized so scheduler paths cannot drift apart.
 	weeklyWarmupMinimumUsedPercent = 1.0
@@ -131,7 +135,11 @@ func (s *GatewayService) scheduleAntigravityWeeklyUsageRefresh(accounts []Accoun
 		if known && utilization > 0 {
 			continue
 		}
-		if !s.markWeeklyWarmupRefresh(account.ID, now) {
+		interval := weeklyWarmupRefreshInterval
+		if known {
+			interval = weeklyWarmupKnownZeroRefreshInterval
+		}
+		if !s.markWeeklyWarmupRefresh(account.ID, now, interval) {
 			continue
 		}
 		accountID := account.ID
@@ -145,7 +153,7 @@ func (s *GatewayService) scheduleAntigravityWeeklyUsageRefresh(accounts []Accoun
 	}
 }
 
-func (s *GatewayService) markWeeklyWarmupRefresh(accountID int64, now time.Time) bool {
+func (s *GatewayService) markWeeklyWarmupRefresh(accountID int64, now time.Time, interval time.Duration) bool {
 	if s == nil || accountID <= 0 {
 		return false
 	}
@@ -154,7 +162,7 @@ func (s *GatewayService) markWeeklyWarmupRefresh(accountID int64, now time.Time)
 	if s.weeklyWarmupRefreshAt == nil {
 		s.weeklyWarmupRefreshAt = make(map[int64]time.Time)
 	}
-	if last := s.weeklyWarmupRefreshAt[accountID]; !last.IsZero() && now.Sub(last) < weeklyWarmupRefreshInterval {
+	if last := s.weeklyWarmupRefreshAt[accountID]; !last.IsZero() && now.Sub(last) < interval {
 		return false
 	}
 	s.weeklyWarmupRefreshAt[accountID] = now

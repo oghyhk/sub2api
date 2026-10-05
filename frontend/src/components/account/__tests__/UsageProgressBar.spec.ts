@@ -146,4 +146,23 @@ describe('UsageProgressBar', () => {
     expect(wrapper.get('.h-1\\.5 > div').attributes('style')).toContain('width: 100%')
     expect(wrapper.get('.h-1\\.5 > div').classes()).toContain('bg-red-500')
   })
+
+  it('unavailable=true 时显示“无数据”且不显示倒计时', () => {
+    const wrapper = mount(UsageProgressBar, {
+      props: {
+        label: '7d',
+        utilization: 0,
+        resetsAt: '2026-03-17T02:30:00Z',
+        unavailable: true,
+        windowStats: { requests: 62, tokens: 126533, cost: 1.15 },
+        color: 'amber'
+      }
+    })
+
+    expect(wrapper.text()).toContain('admin.accounts.usageWindow.meterUnavailable')
+    expect(wrapper.text()).not.toContain('0%')
+    expect(wrapper.text()).not.toContain('2h 30m')
+    expect(wrapper.text()).toContain('62 req')
+    expect(wrapper.get('.h-1\\.5 > div').attributes('style')).toContain('width: 0%')
+  })
 })

@@ -109,17 +109,26 @@ func mergeAntigravityQuotaSummary(info *UsageInfo, summary *antigravity.UserQuot
 			if bucket.BucketID == "" || bucket.RemainingFraction == nil {
 				continue
 			}
-			remaining := *bucket.RemainingFraction
-			if remaining < 0 {
-				remaining = 0
-			} else if remaining > 1 {
-				remaining = 1
-			}
-			info.AntigravityQuota[bucket.BucketID] = &AntigravityModelQuota{
-				Utilization: int((1 - remaining) * 100),
-				ResetTime:   bucket.ResetTime,
-			}
+			info.AntigravityQuota[bucket.BucketID] = newAntigravityModelQuota(*bucket.RemainingFraction, bucket.ResetTime)
 		}
+	}
+}
+
+// newAntigravityModelQuota 把上游 remainingFraction 转为配额条目。Utilization 保持
+// 截断整数（周窗口预热调度以 <1% 判定，口径不变）；展示层使用 UsedPercent。
+// remainingFraction=1 的窗口为空窗口，其 resetTime 是“探测时刻 + 窗口长度”的占位值。
+func newAntigravityModelQuota(remaining float64, resetTime string) *AntigravityModelQuota {
+	if remaining < 0 {
+		remaining = 0
+	} else if remaining > 1 {
+		remaining = 1
+	}
+	used := (1 - remaining) * 100
+	return &AntigravityModelQuota{
+		Utilization: int(used),
+		ResetTime:   resetTime,
+		UsedPercent: used,
+		Empty:       remaining >= 1,
 	}
 }
 
@@ -176,12 +185,7 @@ func (f *AntigravityQuotaFetcher) buildUsageInfo(modelsResp *antigravity.FetchAv
 		}
 
 		// remainingFraction 是剩余比例 (0.0-1.0)，转换为使用率百分比
-		utilization := int((1.0 - modelInfo.QuotaInfo.RemainingFraction) * 100)
-
-		info.AntigravityQuota[modelName] = &AntigravityModelQuota{
-			Utilization: utilization,
-			ResetTime:   modelInfo.QuotaInfo.ResetTime,
-		}
+		info.AntigravityQuota[modelName] = newAntigravityModelQuota(modelInfo.QuotaInfo.RemainingFraction, modelInfo.QuotaInfo.ResetTime)
 
 		// 填充模型详细能力信息
 		detail := &AntigravityModelDetail{

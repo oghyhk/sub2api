@@ -298,17 +298,21 @@
             <UsageProgressBar
               v-if="antigravityGemini5hUsageFromAPI"
               :label="t('admin.accounts.usageWindow.fiveHourShort')"
-              :title="t('admin.accounts.usageWindow.gemini5hHint')"
+              :title="antigravityGemini5hUsageFromAPI.unmetered ? t('admin.accounts.usageWindow.unmeteredHint') : t('admin.accounts.usageWindow.gemini5hHint')"
               :utilization="antigravityGemini5hUsageFromAPI.utilization"
               :resets-at="antigravityGemini5hUsageFromAPI.resetTime"
+              :unavailable="antigravityGemini5hUsageFromAPI.unmetered"
+              :window-stats="antigravityLocalUsage('gemini_5h')"
               color="emerald"
             />
             <UsageProgressBar
               v-if="antigravityGemini7dUsageFromAPI"
               :label="t('admin.accounts.usageWindow.sevenDayShort')"
-              :title="t('admin.accounts.usageWindow.gemini7dHint')"
+              :title="antigravityGemini7dUsageFromAPI.unmetered ? t('admin.accounts.usageWindow.unmeteredHint') : t('admin.accounts.usageWindow.gemini7dHint')"
               :utilization="antigravityGemini7dUsageFromAPI.utilization"
               :resets-at="antigravityGemini7dUsageFromAPI.resetTime"
+              :unavailable="antigravityGemini7dUsageFromAPI.unmetered"
+              :window-stats="antigravityLocalUsage('gemini_7d')"
               color="emerald"
             />
           </div>
@@ -319,17 +323,21 @@
             <UsageProgressBar
               v-if="antigravityClaude5hUsageFromAPI"
               :label="t('admin.accounts.usageWindow.fiveHourShort')"
-              :title="t('admin.accounts.usageWindow.claude5hHint')"
+              :title="antigravityClaude5hUsageFromAPI.unmetered ? t('admin.accounts.usageWindow.unmeteredHint') : t('admin.accounts.usageWindow.claude5hHint')"
               :utilization="antigravityClaude5hUsageFromAPI.utilization"
               :resets-at="antigravityClaude5hUsageFromAPI.resetTime"
+              :unavailable="antigravityClaude5hUsageFromAPI.unmetered"
+              :window-stats="antigravityLocalUsage('claude_5h')"
               color="amber"
             />
             <UsageProgressBar
               v-if="antigravityClaude7dUsageFromAPI"
               :label="t('admin.accounts.usageWindow.sevenDayShort')"
-              :title="t('admin.accounts.usageWindow.claude7dHint')"
+              :title="antigravityClaude7dUsageFromAPI.unmetered ? t('admin.accounts.usageWindow.unmeteredHint') : t('admin.accounts.usageWindow.claude7dHint')"
               :utilization="antigravityClaude7dUsageFromAPI.utilization"
               :resets-at="antigravityClaude7dUsageFromAPI.resetTime"
+              :unavailable="antigravityClaude7dUsageFromAPI.unmetered"
+              :window-stats="antigravityLocalUsage('claude_7d')"
               color="amber"
             />
           </div>
@@ -740,6 +748,7 @@ const shouldLazyLoadOnMobile = computed(() => {
 interface AntigravityUsageResult {
   utilization: number
   resetTime: string | null
+  unmetered: boolean // 上游不计量（所有匹配条目均为 unmetered）
 }
 
 // ===== Antigravity quota from API (usageInfo.antigravity_quota) =====
@@ -758,10 +767,17 @@ const getAntigravityUsageFromAPI = (
 
   let maxUtilization = 0
   let earliestReset: string | null = null
+  let matched = 0
+  let unmeteredCount = 0
 
   for (const model of modelNames) {
     const modelQuota = quota[model]
     if (!modelQuota) continue
+    matched++
+    if (modelQuota.unmetered) {
+      unmeteredCount++
+      continue
+    }
 
     if (modelQuota.utilization > maxUtilization) {
       maxUtilization = modelQuota.utilization
@@ -781,8 +797,16 @@ const getAntigravityUsageFromAPI = (
 
   return {
     utilization: maxUtilization,
-    resetTime: earliestReset
+    resetTime: earliestReset,
+    unmetered: matched > 0 && unmeteredCount === matched
   }
+}
+
+// 本网关记录的真实用量（窗口内请求数 / tokens / 账号成本），显示在进度条上方
+const antigravityLocalUsage = (key: string): WindowStats | null => {
+  const stats = usageInfo.value?.antigravity_local_usage?.[key]
+  if (!stats) return null
+  return { requests: stats.requests, tokens: stats.tokens, cost: stats.cost }
 }
 
 const antigravityGemini5hUsageFromAPI = computed(() =>
